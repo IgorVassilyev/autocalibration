@@ -27,7 +27,7 @@ class SimpleArUcoDetector:
         """
         image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
         if image is None:
-            return {}
+            print(f"warning: could not read {image_path}")
 
         corners, ids, _ = self.detector.detectMarkers(image)
         results: Dict[int, Tuple[float, float]] = {}

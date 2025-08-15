@@ -15,9 +15,12 @@ def main():
     for cam_id, cam in cameras.items():
         pos = cam["position"]
         print(f"{cam_id}: {pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}")
-        for marker_id, center in detections.get(cam_id, {}).items():
-            print(f"  marker {marker_id}: {center[0]:.1f}, {center[1]:.1f}")
-
+        markers = detections.get(cam_id, {})
+        if not markers:
+            print("  no markers detected")
+        else:
+            for marker_id, center in markers.items():
+                print(f"  marker {marker_id}: {center[0]:.1f}, {center[1]:.1f}")
 
 if __name__ == "__main__":
     main()
