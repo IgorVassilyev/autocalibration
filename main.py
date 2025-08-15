@@ -22,6 +22,5 @@ def main():
             for marker_id, center in markers.items():
                 print(f"  marker {marker_id}: {center[0]:.1f}, {center[1]:.1f}")
 
-
 if __name__ == "__main__":
     main()
