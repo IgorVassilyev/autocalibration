@@ -1,0 +1,79 @@
+# --- Python общие ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Дистрибуция/пакетирование
+.Python
+build/
+dist/
+downloads/
+eggs/
+.eggs/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.spec
+*.manifest
+
+# Логи/кэши/отчёты
+*.log
+.cache/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Типизация/линтеры
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.ruff_cache/
+.pylint.d/
+.pyre/
+
+# Ноутбуки/интерактив
+.ipynb_checkpoints/
+.ipython/
+
+# Среды и менеджеры пакетов
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.conda/
+.python-version      # pyenv
+__pypackages__/      # PDM
+
+# Фреймворки/инструменты (опционально)
+.spyproject/         # Spyder
+.ropeproject/        # Rope
+/site/               # mkdocs
+
+# Базы данных/временные файлы (при желании)
+*.sqlite
+*.sqlite3
+*.db
+
+# --- PyCharm/JetBrains ---
+.idea/
+
+# --- ОС/редакторы ---
+.DS_Store
+Thumbs.db
+.vscode/
