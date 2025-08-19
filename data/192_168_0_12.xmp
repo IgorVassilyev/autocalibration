@@ -1,15 +1,15 @@
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-    <rdf:Description xcr:Version="3" xcr:PosePrior="locked" xcr:Coordinates="absolute"
-       xcr:DistortionModel="brown3" xcr:FocalLength35mm="37.4116778411868"
-       xcr:Skew="0" xcr:AspectRatio="1" xcr:PrincipalPointU="0.0111304960893291"
-       xcr:PrincipalPointV="0.0172125526535872" xcr:CalibrationPrior="exact"
-       xcr:CalibrationGroup="-1" xcr:DistortionGroup="-1" xcr:InTexturing="1"
-       xcr:InMeshing="1" xcr:latitude="179.997581832880314N" xcr:longitude="30.247954734596103W"
-       xcr:version="2.2.0.0" xcr:altitude="643129440/10000" xmlns:xcr="http://www.capturingreality.com/ns/xcr/1.1#">
-      <xcr:Rotation>0.974640814186239 0.00495966077098683 -0.223720104343398 -0.0410503107217311 -0.978825905189064 -0.20053607984714 -0.219977624571304 0.204634427933927 -0.953800081564329</xcr:Rotation>
-      <xcr:Position>1.33500827809173 -0.778489955166292 1.80198912599076</xcr:Position>
-      <xcr:DistortionCoeficients>-0.383710218600401 0.335649554865705 -0.468960814851285 0 0 0</xcr:DistortionCoeficients>
+    <rdf:Description xmlns:xcr="http://www.capturingreality.com/ns/xcr/1.1#" xcr:Version="3"
+       xcr:PosePrior="locked" xcr:Coordinates="absolute" xcr:DistortionModel="brown3"
+       xcr:FocalLength35mm="37.3453715305198" xcr:Skew="0" xcr:AspectRatio="1"
+       xcr:PrincipalPointU="0.0117566141232039" xcr:PrincipalPointV="0.0183326463652016"
+       xcr:CalibrationPrior="exact" xcr:CalibrationGroup="-1" xcr:DistortionGroup="-1"
+       xcr:InTexturing="1" xcr:InMeshing="1" xcr:latitude="179.997585569096486N"
+       xcr:longitude="30.224511662839220W" xcr:version="2.2.0.0" xcr:altitude="643129440/10000">
+      <xcr:Rotation>0.974835670401994 0.00482538902731139 -0.222872455302647 -0.040665514059638 -0.979141442749715 -0.199068709385158 -0.219184241400153 0.203122501734156 -0.95430577783596</xcr:Rotation>
+      <xcr:Position>1.33380289136657 -0.777055913364262 1.79920501632043</xcr:Position>
+      <xcr:DistortionCoeficients>-0.374829470490529 0.254316221404411 -0.245647495839577 0 0 0</xcr:DistortionCoeficients>
     </rdf:Description>
   </rdf:RDF>
 </x:xmpmeta>
