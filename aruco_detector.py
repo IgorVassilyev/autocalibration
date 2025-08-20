@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Упрощенный ArUco детектор на основе рабочего кода из test.py
-============================================================
+ArUco детектор на основе рабочего test.py с DICT_4X4_1000
+=========================================================
 
-Простой и надежный детектор ArUco маркеров для проекта автокалибровки.
-Основан на проверенном коде из test.py с минимальными улучшениями.
+Простой и надежный детектор ArUco маркеров, адаптированный под словарь DICT_4X4_1000.
+Основан на проверенном коде из test.py с добавлением функций для интеграции.
 
 Использование:
-    from aruco_detector_simple import SimpleArUcoDetector
+    from aruco_detector import SimpleArUcoDetector
     
     detector = SimpleArUcoDetector()
     results = detector.detect_markers_in_directory("data")
@@ -34,7 +34,7 @@ class MarkerDetection:
 class SimpleArUcoDetector:
     """
     Простой детектор ArUco маркеров
-    Основан на рабочем коде из test.py с улучшениями для проекта
+    Основан на рабочем коде из test.py, адаптирован под DICT_4X4_1000
     """
     
     def __init__(self, enable_logging: bool = True):
@@ -43,19 +43,17 @@ class SimpleArUcoDetector:
         
         Parameters:
         -----------
-        dictionary_type : int, optional
-            Тип словаря ArUco. Если None, будет определен автоматически
         enable_logging : bool
             Включить вывод информации о процессе
         """
         self.enable_logging = enable_logging
         
+        # Используем DICT_4X4_1000 как в test.py
         self.dictionary_type = cv2.aruco.DICT_4X4_1000
-            
-        # Инициализация детектора (как в test.py)
+        
+        # Инициализация детектора (точно как в test.py)
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(self.dictionary_type)
         self.parameters = cv2.aruco.DetectorParameters()
-        self.detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.parameters)
         
         # Статистика
         self.detection_stats = {
@@ -67,26 +65,7 @@ class SimpleArUcoDetector:
         }
         
         if self.enable_logging:
-            dict_name = self._get_dictionary_name(self.dictionary_type)
-            print(f"🔧 ArUco детектор инициализирован с словарем: {dict_name}")
-    
-    def _get_dictionary_name(self, dict_type: int) -> str:
-        """Получить название словаря по его типу"""
-        dict_names = {
-            cv2.aruco.DICT_4X4_50: "DICT_4X4_50",
-            cv2.aruco.DICT_4X4_100: "DICT_4X4_100",
-            cv2.aruco.DICT_4X4_250: "DICT_4X4_250", 
-            cv2.aruco.DICT_4X4_1000: "DICT_4X4_1000",
-            cv2.aruco.DICT_5X5_50: "DICT_5X5_50",
-            cv2.aruco.DICT_5X5_100: "DICT_5X5_100",
-            cv2.aruco.DICT_5X5_250: "DICT_5X5_250",
-            cv2.aruco.DICT_5X5_1000: "DICT_5X5_1000",
-            cv2.aruco.DICT_6X6_50: "DICT_6X6_50",
-            cv2.aruco.DICT_6X6_100: "DICT_6X6_100",
-            cv2.aruco.DICT_6X6_250: "DICT_6X6_250",
-            cv2.aruco.DICT_6X6_1000: "DICT_6X6_1000",
-        }
-        return dict_names.get(dict_type, f"UNKNOWN_{dict_type}")
+            print(f"🔧 ArUco детектор инициализирован с словарем: DICT_4X4_1000")
     
     def detect_markers_in_image(self, image_path: str) -> Dict[int, MarkerDetection]:
         """
@@ -107,7 +86,7 @@ class SimpleArUcoDetector:
             img = cv2.imread(image_path)
             if img is None:
                 if self.enable_logging:
-                    print(f"❌ Не удалось загрузить {image_path}")
+                    print(f"[!] Не удалось прочитать {image_path}")
                 self.detection_stats['failed_images'].append(image_path)
                 return {}
             
@@ -115,7 +94,8 @@ class SimpleArUcoDetector:
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             
             # Поиск маркеров (как в test.py)
-            corners, ids, rejected = self.detector.detectMarkers(gray)
+            detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.parameters)
+            corners, ids, _ = detector.detectMarkers(gray)
             
             # Обработка результатов
             detections = {}
@@ -150,18 +130,18 @@ class SimpleArUcoDetector:
                 if self.enable_logging:
                     filename = os.path.basename(image_path)
                     marker_ids = list(detections.keys())
-                    print(f"✅ {filename}: найдено {len(marker_ids)} маркеров {marker_ids}")
+                    print(f"[OK] {filename}: найдено {len(marker_ids)} маркер(ов) {marker_ids}")
             else:
                 if self.enable_logging:
                     filename = os.path.basename(image_path)
-                    print(f"⚪ {filename}: маркеры не найдены")
+                    print(f"[..] {filename}: маркеры не найдены")
             
             self.detection_stats['total_images'] += 1
             return detections
             
         except Exception as e:
             if self.enable_logging:
-                print(f"❌ Ошибка обработки {image_path}: {e}")
+                print(f"[!] Ошибка обработки {image_path}: {e}")
             self.detection_stats['failed_images'].append(image_path)
             return {}
     
@@ -182,7 +162,7 @@ class SimpleArUcoDetector:
         if self.enable_logging:
             print(f"🔍 Поиск изображений в {directory}")
         
-        # Поиск изображений (расширенный список из test.py)
+        # Поиск изображений (как в test.py)
         image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp"]
         images = []
         
@@ -201,8 +181,7 @@ class SimpleArUcoDetector:
             return {}
         
         if self.enable_logging:
-            print(f"📸 Найдено {len(images)} изображений")
-            print("-" * 40)
+            print(f"Найдено {len(images)} изображений")
         
         # Обработка каждого изображения
         all_detections = {}
@@ -269,6 +248,20 @@ class SimpleArUcoDetector:
         failed_cameras = [cam_id for cam_id, detections in all_detections.items() if not detections]
         if failed_cameras:
             print(f"\n⚠️  Камеры без маркеров: {failed_cameras}")
+        
+        # Оценка готовности для триангуляции
+        triangulatable_markers = sum(1 for freq in marker_frequency.values() if freq >= 3)
+        print(f"\n🎯 ГОТОВНОСТЬ ДЛЯ 3D ТРИАНГУЛЯЦИИ:")
+        print(f"   Маркеров видимых на ≥3 камерах: {triangulatable_markers}")
+        
+        if triangulatable_markers >= 8:
+            print("   ✅ Отлично! Достаточно для надежной триангуляции")
+        elif triangulatable_markers >= 5:
+            print("   ⚠️  Хорошо. Достаточно для базовой триангуляции")
+        elif triangulatable_markers >= 3:
+            print("   ⚠️  Минимально. Результат может быть неточным")
+        else:
+            print("   ❌ Недостаточно для триангуляции")
     
     def save_results_to_json(self, detections: Dict[str, Dict[int, MarkerDetection]], 
                            output_path: str) -> None:
@@ -285,8 +278,8 @@ class SimpleArUcoDetector:
         # Подготовка данных для JSON
         json_data = {
             'metadata': {
-                'detector_version': 'simple_1.0',
-                'dictionary': self._get_dictionary_name(self.dictionary_type),
+                'detector_version': 'simple_dict_4x4_1000',
+                'dictionary': 'DICT_4X4_1000',
                 'total_cameras': len(detections),
                 'cameras_with_markers': len([d for d in detections.values() if d]),
                 'unique_markers': len(self.detection_stats['unique_marker_ids']),
@@ -317,27 +310,76 @@ class SimpleArUcoDetector:
         stats = self.detection_stats.copy()
         stats['unique_marker_ids'] = sorted(list(stats['unique_marker_ids']))
         return stats
+    
+    def create_output_images(self, directory: str, output_dir: str) -> None:
+        """
+        Создание изображений с отмеченными маркерами (как в test.py)
+        
+        Parameters:
+        -----------
+        directory : str
+            Директория с исходными изображениями
+        output_dir : str
+            Директория для сохранения результатов
+        """
+        # Создание выходной директории
+        os.makedirs(output_dir, exist_ok=True)
+        
+        if self.enable_logging:
+            print(f"🎨 Создание изображений с отмеченными маркерами...")
+        
+        # Поиск изображений
+        image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp"]
+        images = []
+        
+        for ext in image_extensions:
+            pattern = os.path.join(directory, ext)
+            images.extend(glob.glob(pattern))
+        
+        images = sorted(list(set(images)))
+        
+        for img_path in images:
+            img = cv2.imread(img_path)
+            if img is None:
+                if self.enable_logging:
+                    print(f"[!] Не удалось прочитать {img_path}")
+                continue
+
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # Поиск маркеров (как в test.py)
+            detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.parameters)
+            corners, ids, _ = detector.detectMarkers(gray)
+
+            # Отрисовка (как в test.py)
+            if ids is not None:
+                cv2.aruco.drawDetectedMarkers(img, corners, ids)
+
+            # Сохраняем результат (как в test.py)
+            out_path = os.path.join(output_dir, os.path.basename(img_path))
+            cv2.imwrite(out_path, img)
+        
+        if self.enable_logging:
+            print(f"✅ Изображения с маркерами сохранены в {output_dir}")
 
 
-# Удобные функции для совместимости и простого использования
+# Удобные функции для совместимости
 
-def detect_markers_simple(image_path: str, dictionary_type: int = cv2.aruco.DICT_4X4_1000) -> Dict[int, Tuple[float, float]]:
+def detect_markers_simple(image_path: str) -> Dict[int, Tuple[float, float]]:
     """
-    Простая функция детекции (совместимость с оригинальным API)
+    Простая функция детекции одного изображения
     
     Parameters:
     -----------
     image_path : str
         Путь к изображению
-    dictionary_type : int
-        Тип словаря ArUco
         
     Returns:
     --------
     Dict[int, Tuple[float, float]]
         Словарь {marker_id: (center_x, center_y)}
     """
-    detector = SimpleArUcoDetector(dictionary_type, enable_logging=False)
+    detector = SimpleArUcoDetector(enable_logging=False)
     detections = detector.detect_markers_in_image(image_path)
     
     # Преобразование к простому формату
@@ -347,9 +389,12 @@ def detect_markers_simple(image_path: str, dictionary_type: int = cv2.aruco.DICT
     }
 
 
-def test_detection_on_directory(directory: str = "data", output_file: str = "detection_results.json") -> Dict:
+def detect_all_markers_in_directory(directory: str = "data", 
+                                   output_file: str = "detection_results.json",
+                                   create_images: bool = False,
+                                   images_output_dir: str = "output") -> Dict:
     """
-    Основная функция для тестирования детекции на директории
+    Основная функция для детекции маркеров в директории
     
     Parameters:
     -----------
@@ -357,16 +402,22 @@ def test_detection_on_directory(directory: str = "data", output_file: str = "det
         Директория с изображениями
     output_file : str
         Файл для сохранения результатов
+    create_images : bool
+        Создавать ли изображения с отмеченными маркерами
+    images_output_dir : str
+        Директория для сохранения изображений с маркерами
         
     Returns:
     --------
     dict
         Результаты детекции
     """
-    print("🚀 ТЕСТИРОВАНИЕ ДЕТЕКЦИИ ARUCO МАРКЕРОВ")
+    print("🚀 ДЕТЕКЦИЯ ARUCO МАРКЕРОВ (DICT_4X4_1000)")
     print("=" * 50)
     print(f"📂 Директория: {directory}")
     print(f"💾 Результаты будут сохранены в: {output_file}")
+    if create_images:
+        print(f"🎨 Изображения с маркерами в: {images_output_dir}")
     print("=" * 50)
     
     # Создание детектора
@@ -378,18 +429,21 @@ def test_detection_on_directory(directory: str = "data", output_file: str = "det
     # Сохранение результатов
     if detections:
         detector.save_results_to_json(detections, output_file)
+        
+        # Создание изображений с маркерами если запрошено
+        if create_images:
+            detector.create_output_images(directory, images_output_dir)
     
     # Возврат результатов
     return detections
 
 
-# Функция для тестирования модуля
 def main():
     """Функция для прямого запуска модуля"""
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="Простая детекция ArUco маркеров (на основе test.py)"
+        description="Детекция ArUco маркеров DICT_4X4_1000 (на основе test.py)"
     )
     
     parser.add_argument(
@@ -405,23 +459,18 @@ def main():
     )
     
     parser.add_argument(
-        '--dictionary',
-        choices=['4x4_50', '4x4_100', '4x4_250', '4x4_1000'],
-        default='4x4_1000',
-        help='Словарь ArUco (по умолчанию: 4x4_1000 как в test.py)'
+        '--create_images',
+        action='store_true',
+        help='Создать изображения с отмеченными маркерами'
+    )
+    
+    parser.add_argument(
+        '--images_output',
+        default='output',
+        help='Директория для изображений с маркерами (по умолчанию: output)'
     )
     
     args = parser.parse_args()
-    
-    # Преобразование названия словаря в константу
-    dict_mapping = {
-        '4x4_50': cv2.aruco.DICT_4X4_50,
-        '4x4_100': cv2.aruco.DICT_4X4_100,
-        '4x4_250': cv2.aruco.DICT_4X4_250,
-        '4x4_1000': cv2.aruco.DICT_4X4_1000,
-    }
-    
-    dictionary_type = dict_mapping[args.dictionary]
     
     # Проверка входной директории
     if not os.path.exists(args.input):
@@ -429,34 +478,38 @@ def main():
         return 1
     
     # Запуск детекции
-    detector = SimpleArUcoDetector(dictionary_type, enable_logging=True)
-    detections = detector.detect_markers_in_directory(args.input)
+    detections = detect_all_markers_in_directory(
+        directory=args.input,
+        output_file=args.output,
+        create_images=args.create_images,
+        images_output_dir=args.images_output
+    )
     
     if detections:
-        detector.save_results_to_json(detections, args.output)
         print(f"\n✅ Детекция завершена успешно!")
         
         # Проверка готовности для триангуляции
-        stats = detector.get_detection_statistics()
-        triangulatable_markers = sum(
-            1 for marker_id in stats['unique_marker_ids']
-            if sum(1 for detections in detections.values() if marker_id in detections) >= 3
-        )
+        marker_frequency = {}
+        for camera_detections in detections.values():
+            for marker_id in camera_detections.keys():
+                marker_frequency[marker_id] = marker_frequency.get(marker_id, 0) + 1
+        
+        triangulatable_markers = sum(1 for freq in marker_frequency.values() if freq >= 3)
         
         print(f"\n🎯 Готовность для 3D триангуляции:")
         print(f"   Маркеров видимых на ≥3 камерах: {triangulatable_markers}")
         
         if triangulatable_markers >= 5:
-            print("   ✅ Отлично! Можно переходить к триангуляции")
+            print("   ✅ Готово для следующего этапа триангуляции!")
         elif triangulatable_markers >= 3:
-            print("   ⚠️  Достаточно для базовой триангуляции")
+            print("   ⚠️  Минимально достаточно для триангуляции")
         else:
             print("   ❌ Недостаточно для надежной триангуляции")
+            
+        return 0
     else:
         print(f"\n❌ Маркеры не найдены")
         return 1
-    
-    return 0
 
 
 if __name__ == "__main__":
