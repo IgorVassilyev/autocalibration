@@ -1,147 +1,101 @@
-import os
+#!/usr/bin/env python3
+"""
+Упрощенный ArUco детектор на основе рабочего кода из test.py
+============================================================
+
+Простой и надежный детектор ArUco маркеров для проекта автокалибровки.
+Основан на проверенном коде из test.py с минимальными улучшениями.
+
+Использование:
+    from aruco_detector_simple import SimpleArUcoDetector
+    
+    detector = SimpleArUcoDetector()
+    results = detector.detect_markers_in_directory("data")
+"""
+
 import cv2
+import os
+import glob
+import json
 import numpy as np
-from typing import Dict, Tuple, List, Optional
-import logging
+from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
 
 @dataclass
 class MarkerDetection:
-    """Структура для хранения данных о детектированном маркере"""
+    """Структура для хранения информации о детектированном маркере"""
     marker_id: int
     center: Tuple[float, float]
-    corners: np.ndarray
-    confidence: float
+    corners: List[List[float]]  # 4 угла [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
     area: float
+    
 
-
-class EnhancedArUcoDetector:
+class SimpleArUcoDetector:
     """
-    Улучшенный детектор ArUco маркеров 4x4 с повышенной точностью
-    для проекта автокалибровки камер.
+    Простой детектор ArUco маркеров
+    Основан на рабочем коде из test.py с улучшениями для проекта
     """
-
-    def __init__(self, enable_logging: bool = True, debug_mode: bool = False):
+    
+    def __init__(self, enable_logging: bool = True):
         """
         Инициализация детектора
         
         Parameters:
         -----------
+        dictionary_type : int, optional
+            Тип словаря ArUco. Если None, будет определен автоматически
         enable_logging : bool
-            Включить логирование процесса детекции
-        debug_mode : bool
-            Сохранять промежуточные изображения для отладки
+            Включить вывод информации о процессе
         """
-        # Настройка логирования
-        if enable_logging:
-            logging.basicConfig(
-                level=logging.INFO,
-                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            )
-        self.logger = logging.getLogger(__name__)
-        self.debug_mode = debug_mode
+        self.enable_logging = enable_logging
         
-        # Инициализация детектора ArUco
-        self.dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-        self.parameters = self._create_detection_parameters()
-        self.detector = cv2.aruco.ArucoDetector(self.dictionary, self.parameters)
+        self.dictionary_type = cv2.aruco.DICT_4X4_1000
+            
+        # Инициализация детектора (как в test.py)
+        self.aruco_dict = cv2.aruco.getPredefinedDictionary(self.dictionary_type)
+        self.parameters = cv2.aruco.DetectorParameters()
+        self.detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.parameters)
         
-        # Статистика детекции
+        # Статистика
         self.detection_stats = {
-            'total_images_processed': 0,
-            'total_markers_detected': 0,
-            'markers_by_id': {},
-            'failed_detections': []
+            'total_images': 0,
+            'images_with_markers': 0,
+            'total_markers_found': 0,
+            'unique_marker_ids': set(),
+            'failed_images': []
         }
-
-    def _create_detection_parameters(self) -> cv2.aruco.DetectorParameters:
+        
+        if self.enable_logging:
+            dict_name = self._get_dictionary_name(self.dictionary_type)
+            print(f"🔧 ArUco детектор инициализирован с словарем: {dict_name}")
+    
+    def _get_dictionary_name(self, dict_type: int) -> str:
+        """Получить название словаря по его типу"""
+        dict_names = {
+            cv2.aruco.DICT_4X4_50: "DICT_4X4_50",
+            cv2.aruco.DICT_4X4_100: "DICT_4X4_100",
+            cv2.aruco.DICT_4X4_250: "DICT_4X4_250", 
+            cv2.aruco.DICT_4X4_1000: "DICT_4X4_1000",
+            cv2.aruco.DICT_5X5_50: "DICT_5X5_50",
+            cv2.aruco.DICT_5X5_100: "DICT_5X5_100",
+            cv2.aruco.DICT_5X5_250: "DICT_5X5_250",
+            cv2.aruco.DICT_5X5_1000: "DICT_5X5_1000",
+            cv2.aruco.DICT_6X6_50: "DICT_6X6_50",
+            cv2.aruco.DICT_6X6_100: "DICT_6X6_100",
+            cv2.aruco.DICT_6X6_250: "DICT_6X6_250",
+            cv2.aruco.DICT_6X6_1000: "DICT_6X6_1000",
+        }
+        return dict_names.get(dict_type, f"UNKNOWN_{dict_type}")
+    
+    def detect_markers_in_image(self, image_path: str) -> Dict[int, MarkerDetection]:
         """
-        Создание оптимизированных параметров детекции для данного проекта
-        """
-        params = cv2.aruco.DetectorParameters()
-        
-        # === ОСНОВНЫЕ ПАРАМЕТРЫ ===
-        # Адаптивная пороговая обработка
-        params.adaptiveThreshWinSizeMin = 3
-        params.adaptiveThreshWinSizeMax = 23
-        params.adaptiveThreshWinSizeStep = 10
-        params.adaptiveThreshConstant = 7
-        
-        # === КОНТУРНЫЙ АНАЛИЗ ===
-        # Минимальный размер контура (в пикселях)
-        params.minMarkerPerimeterRate = 0.03  # 3% от размера изображения
-        params.maxMarkerPerimeterRate = 4.0   # максимум 400%
-        
-        # Точность аппроксимации контура
-        params.polygonalApproxAccuracyRate = 0.03
-        
-        # === ФИЛЬТРАЦИЯ КАНДИДАТОВ ===
-        # Минимальный размер углового региона
-        params.minCornerDistanceRate = 0.05
-        
-        # Минимальное расстояние между маркерами
-        params.minDistanceToBorder = 3
-        
-        # === КОДИРОВКА И КОРРЕКЦИЯ ===
-        # Количество бит для коррекции ошибок
-        params.maxErroneousBitsInBorderRate = 0.35
-        
-        # Минимальная дисперсия отсэмплированных точек
-        params.minOtsuStdDev = 5.0
-        
-        # === УГЛОВАЯ ДЕТЕКЦИЯ ===
-        # Точность детекции углов
-        params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
-        params.cornerRefinementWinSize = 5
-        params.cornerRefinementMaxIterations = 30
-        params.cornerRefinementMinAccuracy = 0.1
-        
-        return params
-
-    def preprocess_image(self, image: np.ndarray) -> np.ndarray:
-        """
-        Предобработка изображения для улучшения детекции маркеров
-        
-        Parameters:
-        -----------
-        image : np.ndarray
-            Входное изображение (цветное или серое)
-            
-        Returns:
-        --------
-        np.ndarray
-            Обработанное серое изображение
-        """
-        # Конвертация в серый если нужно
-        if len(image.shape) == 3:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = image.copy()
-        
-        # === УЛУЧШЕНИЕ КОНТРАСТА ===
-        # Адаптивная гистограммная эквализация
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        enhanced = clahe.apply(gray)
-        
-        # === ШУМОПОДАВЛЕНИЕ ===
-        # Небольшое размытие для уменьшения шума
-        denoised = cv2.bilateralFilter(enhanced, 9, 75, 75)
-        
-        # Сохранение промежуточного результата для отладки
-        if self.debug_mode:
-            cv2.imwrite('debug_preprocessed.jpg', denoised)
-            
-        return denoised
-
-    def detect_markers(self, image_path: str) -> Dict[int, MarkerDetection]:
-        """
-        Основная функция детекции маркеров с расширенной информацией
+        Детекция маркеров в одном изображении (основано на test.py)
         
         Parameters:
         -----------
         image_path : str
-            Путь к изображению для анализа
+            Путь к изображению
             
         Returns:
         --------
@@ -149,79 +103,69 @@ class EnhancedArUcoDetector:
             Словарь детектированных маркеров {marker_id: MarkerDetection}
         """
         try:
-            # Загрузка изображения
-            image = cv2.imread(image_path, cv2.IMREAD_COLOR)
-            if image is None:
-                self.logger.error(f"Не удалось загрузить изображение: {image_path}")
-                self.detection_stats['failed_detections'].append(image_path)
+            # Загрузка изображения (как в test.py)
+            img = cv2.imread(image_path)
+            if img is None:
+                if self.enable_logging:
+                    print(f"❌ Не удалось загрузить {image_path}")
+                self.detection_stats['failed_images'].append(image_path)
                 return {}
             
-            # Предобработка
-            processed_image = self.preprocess_image(image)
+            # Конвертация в серый (как в test.py)
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             
-            # Детекция маркеров
-            corners, ids, rejected = self.detector.detectMarkers(processed_image)
+            # Поиск маркеров (как в test.py)
+            corners, ids, rejected = self.detector.detectMarkers(gray)
             
             # Обработка результатов
             detections = {}
             
             if ids is not None and len(ids) > 0:
-                self.logger.info(f"Найдено {len(ids)} маркеров в {os.path.basename(image_path)}")
-                
                 for i, marker_id in enumerate(ids.flatten()):
+                    # Извлечение углов маркера
                     marker_corners = corners[i].reshape(4, 2)
                     
-                    # Вычисление центра маркера
-                    center = marker_corners.mean(axis=0)
+                    # Вычисление центра
+                    center_x = float(np.mean(marker_corners[:, 0]))
+                    center_y = float(np.mean(marker_corners[:, 1]))
                     
-                    # Вычисление площади маркера
-                    area = cv2.contourArea(marker_corners)
-                    
-                    # Вычисление "уверенности" (простая метрика на основе площади)
-                    confidence = min(1.0, area / 10000.0)  # нормализация на типичную площадь
+                    # Вычисление площади
+                    area = float(cv2.contourArea(marker_corners))
                     
                     # Создание объекта детекции
                     detection = MarkerDetection(
                         marker_id=int(marker_id),
-                        center=(float(center[0]), float(center[1])),
-                        corners=marker_corners,
-                        confidence=confidence,
+                        center=(center_x, center_y),
+                        corners=marker_corners.tolist(),
                         area=area
                     )
                     
                     detections[int(marker_id)] = detection
-                    
-                    # Обновление статистики
-                    if int(marker_id) not in self.detection_stats['markers_by_id']:
-                        self.detection_stats['markers_by_id'][int(marker_id)] = 0
-                    self.detection_stats['markers_by_id'][int(marker_id)] += 1
                 
-                # Сохранение отладочного изображения с маркерами
-                if self.debug_mode:
-                    debug_image = image.copy()
-                    cv2.aruco.drawDetectedMarkers(debug_image, corners, ids)
-                    debug_filename = f"debug_detected_{os.path.basename(image_path)}"
-                    cv2.imwrite(debug_filename, debug_image)
-                    self.logger.info(f"Сохранено отладочное изображение: {debug_filename}")
+                # Обновление статистики
+                self.detection_stats['total_markers_found'] += len(detections)
+                self.detection_stats['unique_marker_ids'].update(detections.keys())
+                self.detection_stats['images_with_markers'] += 1
                 
+                if self.enable_logging:
+                    filename = os.path.basename(image_path)
+                    marker_ids = list(detections.keys())
+                    print(f"✅ {filename}: найдено {len(marker_ids)} маркеров {marker_ids}")
             else:
-                self.logger.warning(f"Маркеры не найдены в {os.path.basename(image_path)}")
-                if len(rejected) > 0:
-                    self.logger.info(f"Отклонено {len(rejected)} кандидатов")
+                if self.enable_logging:
+                    filename = os.path.basename(image_path)
+                    print(f"⚪ {filename}: маркеры не найдены")
             
-            # Обновление общей статистики
-            self.detection_stats['total_images_processed'] += 1
-            self.detection_stats['total_markers_detected'] += len(detections)
-            
+            self.detection_stats['total_images'] += 1
             return detections
             
         except Exception as e:
-            self.logger.error(f"Ошибка при обработке {image_path}: {e}")
-            self.detection_stats['failed_detections'].append(image_path)
+            if self.enable_logging:
+                print(f"❌ Ошибка обработки {image_path}: {e}")
+            self.detection_stats['failed_images'].append(image_path)
             return {}
-
-    def detect_from_directory(self, directory: str, 
-                            expected_markers: Optional[List[int]] = None) -> Dict[str, Dict[int, MarkerDetection]]:
+    
+    def detect_markers_in_directory(self, directory: str) -> Dict[str, Dict[int, MarkerDetection]]:
         """
         Детекция маркеров во всех изображениях директории
         
@@ -229,206 +173,172 @@ class EnhancedArUcoDetector:
         -----------
         directory : str
             Путь к директории с изображениями
-        expected_markers : List[int], optional
-            Список ожидаемых ID маркеров для валидации
             
         Returns:
         --------
         Dict[str, Dict[int, MarkerDetection]]
-            Результаты детекции {camera_id: {marker_id: MarkerDetection}}
+            Результаты {camera_id: {marker_id: MarkerDetection}}
         """
-        if not os.path.exists(directory):
-            self.logger.error(f"Директория не существует: {directory}")
+        if self.enable_logging:
+            print(f"🔍 Поиск изображений в {directory}")
+        
+        # Поиск изображений (расширенный список из test.py)
+        image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp"]
+        images = []
+        
+        for ext in image_extensions:
+            pattern = os.path.join(directory, ext)
+            images.extend(glob.glob(pattern))
+            # Также в верхнем регистре
+            pattern_upper = os.path.join(directory, ext.upper())
+            images.extend(glob.glob(pattern_upper))
+        
+        images = sorted(list(set(images)))  # убрать дубли и отсортировать
+        
+        if not images:
+            if self.enable_logging:
+                print(f"❌ Изображения не найдены в {directory}")
             return {}
         
-        # Поиск изображений
-        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
-        image_files = [
-            f for f in os.listdir(directory) 
-            if os.path.splitext(f.lower())[1] in image_extensions
-        ]
+        if self.enable_logging:
+            print(f"📸 Найдено {len(images)} изображений")
+            print("-" * 40)
         
-        if not image_files:
-            self.logger.warning(f"Изображения не найдены в {directory}")
-            return {}
-        
-        self.logger.info(f"Обработка {len(image_files)} изображений из {directory}")
-        
+        # Обработка каждого изображения
         all_detections = {}
         
-        for image_file in sorted(image_files):
-            camera_id = os.path.splitext(image_file)[0]
-            image_path = os.path.join(directory, image_file)
+        for image_path in images:
+            # Получаем camera_id из имени файла (без расширения)
+            filename = os.path.basename(image_path)
+            camera_id = os.path.splitext(filename)[0]
             
-            detections = self.detect_markers(image_path)
+            # Детекция маркеров
+            detections = self.detect_markers_in_image(image_path)
             all_detections[camera_id] = detections
-            
-            # Вывод результата для каждого изображения
-            if detections:
-                marker_ids = sorted(detections.keys())
-                self.logger.info(f"  {camera_id}: маркеры {marker_ids}")
-            else:
-                self.logger.warning(f"  {camera_id}: маркеры не найдены")
         
-        # Валидация против ожидаемых маркеров
-        if expected_markers:
-            self._validate_expected_markers(all_detections, expected_markers)
+        # Финальная статистика
+        if self.enable_logging:
+            self._print_detection_summary(all_detections)
         
         return all_detections
-
-    def _validate_expected_markers(self, detections: Dict[str, Dict[int, MarkerDetection]], 
-                                 expected_markers: List[int]) -> None:
-        """Валидация найденных маркеров против ожидаемого списка"""
+    
+    def _print_detection_summary(self, all_detections: Dict[str, Dict[int, MarkerDetection]]) -> None:
+        """Печать сводки результатов детекции"""
         
-        all_found_markers = set()
-        for camera_detections in detections.values():
-            all_found_markers.update(camera_detections.keys())
+        print(f"\n{'='*60}")
+        print("📊 СВОДКА ДЕТЕКЦИИ МАРКЕРОВ")
+        print(f"{'='*60}")
         
-        expected_set = set(expected_markers)
-        missing_markers = expected_set - all_found_markers
-        unexpected_markers = all_found_markers - expected_set
+        # Общая статистика
+        total_cameras = len(all_detections)
+        cameras_with_markers = len([d for d in all_detections.values() if d])
+        total_detections = sum(len(detections) for detections in all_detections.values())
+        unique_markers = len(self.detection_stats['unique_marker_ids'])
         
-        if missing_markers:
-            self.logger.warning(f"Не найдены ожидаемые маркеры: {sorted(missing_markers)}")
+        print(f"🎥 Обработано камер: {total_cameras}")
+        print(f"✅ Камер с маркерами: {cameras_with_markers}")
+        print(f"🏷️  Всего детекций: {total_detections}")
+        print(f"🔢 Уникальных маркеров: {unique_markers}")
         
-        if unexpected_markers:
-            self.logger.info(f"Найдены неожиданные маркеры: {sorted(unexpected_markers)}")
+        if total_cameras > 0:
+            success_rate = (cameras_with_markers / total_cameras) * 100
+            avg_markers = total_detections / cameras_with_markers if cameras_with_markers > 0 else 0
+            print(f"📈 Успешность: {success_rate:.1f}%")
+            print(f"📊 Среднее маркеров на камеру: {avg_markers:.1f}")
         
-        self.logger.info(f"Найдено {len(all_found_markers)} из {len(expected_markers)} ожидаемых маркеров")
-
-    def get_detection_statistics(self) -> Dict:
-        """Получение статистики детекции"""
-        stats = self.detection_stats.copy()
+        # Список всех найденных маркеров
+        if unique_markers > 0:
+            sorted_markers = sorted(self.detection_stats['unique_marker_ids'])
+            print(f"🆔 ID маркеров: {sorted_markers}")
         
-        if stats['total_images_processed'] > 0:
-            stats['average_markers_per_image'] = (
-                stats['total_markers_detected'] / stats['total_images_processed']
-            )
-        else:
-            stats['average_markers_per_image'] = 0
+        # Частота обнаружения каждого маркера
+        marker_frequency = {}
+        for detections in all_detections.values():
+            for marker_id in detections.keys():
+                marker_frequency[marker_id] = marker_frequency.get(marker_id, 0) + 1
         
-        # Сортировка маркеров по частоте обнаружения
-        if stats['markers_by_id']:
-            sorted_markers = sorted(
-                stats['markers_by_id'].items(), 
-                key=lambda x: x[1], 
-                reverse=True
-            )
-            stats['most_detected_markers'] = sorted_markers[:5]
+        if marker_frequency:
+            print(f"\n📊 ЧАСТОТА ОБНАРУЖЕНИЯ:")
+            for marker_id in sorted(marker_frequency.keys()):
+                frequency = marker_frequency[marker_id]
+                percentage = (frequency / total_cameras) * 100
+                triangulatable = "✅" if frequency >= 3 else "⚠️" if frequency >= 2 else "❌"
+                print(f"   Маркер {marker_id:2d}: {frequency:2d}/{total_cameras} камер ({percentage:5.1f}%) {triangulatable}")
         
-        return stats
-
-    def export_detections_to_json(self, detections: Dict[str, Dict[int, MarkerDetection]], 
-                                output_path: str) -> None:
+        # Камеры без маркеров
+        failed_cameras = [cam_id for cam_id, detections in all_detections.items() if not detections]
+        if failed_cameras:
+            print(f"\n⚠️  Камеры без маркеров: {failed_cameras}")
+    
+    def save_results_to_json(self, detections: Dict[str, Dict[int, MarkerDetection]], 
+                           output_path: str) -> None:
         """
-        Экспорт результатов детекции в JSON для дальнейшей обработки
+        Сохранение результатов в JSON файл
         
         Parameters:
         -----------
         detections : dict
-            Результаты детекции от detect_from_directory()
+            Результаты детекции
         output_path : str
             Путь для сохранения JSON файла
         """
-        import json
-        
-        # Подготовка данных для JSON (numpy массивы не сериализуются)
-        export_data = {}
+        # Подготовка данных для JSON
+        json_data = {
+            'metadata': {
+                'detector_version': 'simple_1.0',
+                'dictionary': self._get_dictionary_name(self.dictionary_type),
+                'total_cameras': len(detections),
+                'cameras_with_markers': len([d for d in detections.values() if d]),
+                'unique_markers': len(self.detection_stats['unique_marker_ids']),
+                'total_detections': sum(len(d) for d in detections.values())
+            },
+            'cameras': {}
+        }
         
         for camera_id, camera_detections in detections.items():
-            export_data[camera_id] = {}
+            json_data['cameras'][camera_id] = {}
             
             for marker_id, detection in camera_detections.items():
-                export_data[camera_id][marker_id] = {
+                json_data['cameras'][camera_id][str(marker_id)] = {
                     'center': detection.center,
-                    'corners': detection.corners.tolist(),
-                    'confidence': detection.confidence,
+                    'corners': detection.corners,
                     'area': detection.area
                 }
         
-        # Добавление метаданных
-        export_data['_metadata'] = {
-            'detector_version': '2.0',
-            'dictionary': 'DICT_4X4_50',
-            'statistics': self.get_detection_statistics(),
-            'detection_timestamp': str(cv2.utils.getTickCount())
-        }
-        
+        # Сохранение
         with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(export_data, f, indent=2, ensure_ascii=False)
+            json.dump(json_data, f, indent=2, ensure_ascii=False)
         
-        self.logger.info(f"Результаты детекции сохранены в {output_path}")
-
-    def print_detection_summary(self, detections: Dict[str, Dict[int, MarkerDetection]]) -> None:
-        """Печать сводки результатов детекции"""
-        
-        print(f"\n{'='*60}")
-        print("📊 СВОДКА ДЕТЕКЦИИ ARUCO МАРКЕРОВ")
-        print(f"{'='*60}")
-        
-        # Общая статистика
-        total_cameras = len(detections)
-        total_detections = sum(len(camera_det) for camera_det in detections.values())
-        
-        print(f"🎥 Обработано камер: {total_cameras}")
-        print(f"🏷️  Всего детекций: {total_detections}")
-        
-        if total_cameras > 0:
-            print(f"📈 Среднее маркеров на камеру: {total_detections/total_cameras:.1f}")
-        
-        # Анализ по маркерам
-        all_markers = set()
-        marker_frequency = {}
-        
-        for camera_detections in detections.values():
-            for marker_id in camera_detections.keys():
-                all_markers.add(marker_id)
-                marker_frequency[marker_id] = marker_frequency.get(marker_id, 0) + 1
-        
-        print(f"\n🔍 Уникальных маркеров найдено: {len(all_markers)}")
-        if all_markers:
-            print(f"🏷️  ID маркеров: {sorted(all_markers)}")
-        
-        # Частота обнаружения маркеров
-        if marker_frequency:
-            print(f"\n📊 ЧАСТОТА ОБНАРУЖЕНИЯ МАРКЕРОВ:")
-            for marker_id in sorted(marker_frequency.keys()):
-                frequency = marker_frequency[marker_id]
-                percentage = (frequency / total_cameras) * 100
-                print(f"   Маркер {marker_id:2d}: {frequency:2d}/{total_cameras} камер ({percentage:5.1f}%)")
-        
-        # Детекция по камерам
-        print(f"\n📷 ДЕТЕКЦИЯ ПО КАМЕРАМ:")
-        for camera_id in sorted(detections.keys()):
-            camera_detections = detections[camera_id]
-            if camera_detections:
-                marker_list = sorted(camera_detections.keys())
-                print(f"   {camera_id}: {len(marker_list)} маркеров {marker_list}")
-            else:
-                print(f"   {camera_id}: маркеры не найдены ❌")
-        
-        # Статистика детектора
-        stats = self.get_detection_statistics()
-        print(f"\n🔧 СТАТИСТИКА ДЕТЕКТОРА:")
-        print(f"   Обработано изображений: {stats['total_images_processed']}")
-        print(f"   Общее количество детекций: {stats['total_markers_detected']}")
-        if stats.get('failed_detections'):
-            print(f"   Ошибки обработки: {len(stats['failed_detections'])}")
-
-
-# Удобные функции для использования в проекте
-
-def detect_markers_simple(image_path: str) -> Dict[int, Tuple[float, float]]:
-    """
-    Простая функция детекции маркеров (совместимость с исходным API)
+        if self.enable_logging:
+            print(f"💾 Результаты сохранены в {output_path}")
     
+    def get_detection_statistics(self) -> Dict:
+        """Получение статистики детекции"""
+        stats = self.detection_stats.copy()
+        stats['unique_marker_ids'] = sorted(list(stats['unique_marker_ids']))
+        return stats
+
+
+# Удобные функции для совместимости и простого использования
+
+def detect_markers_simple(image_path: str, dictionary_type: int = cv2.aruco.DICT_4X4_1000) -> Dict[int, Tuple[float, float]]:
+    """
+    Простая функция детекции (совместимость с оригинальным API)
+    
+    Parameters:
+    -----------
+    image_path : str
+        Путь к изображению
+    dictionary_type : int
+        Тип словаря ArUco
+        
     Returns:
     --------
     Dict[int, Tuple[float, float]]
         Словарь {marker_id: (center_x, center_y)}
     """
-    detector = EnhancedArUcoDetector(enable_logging=False)
-    detections = detector.detect_markers(image_path)
+    detector = SimpleArUcoDetector(dictionary_type, enable_logging=False)
+    detections = detector.detect_markers_in_image(image_path)
     
     # Преобразование к простому формату
     return {
@@ -437,77 +347,117 @@ def detect_markers_simple(image_path: str) -> Dict[int, Tuple[float, float]]:
     }
 
 
-def detect_all_markers_in_directory(directory: str, 
-                                  expected_count: int = 13,
-                                  debug_mode: bool = False) -> Dict[str, Dict[int, MarkerDetection]]:
+def test_detection_on_directory(directory: str = "data", output_file: str = "detection_results.json") -> Dict:
     """
-    Основная функция для детекции всех маркеров в проекте
+    Основная функция для тестирования детекции на директории
     
     Parameters:
     -----------
     directory : str
         Директория с изображениями
-    expected_count : int
-        Ожидаемое количество уникальных маркеров
-    debug_mode : bool
-        Режим отладки (сохранение промежуточных изображений)
+    output_file : str
+        Файл для сохранения результатов
         
     Returns:
     --------
-    Dict[str, Dict[int, MarkerDetection]]
-        Полные результаты детекции
+    dict
+        Результаты детекции
     """
-    print(f"🚀 Запуск детекции ArUco маркеров в {directory}")
-    print(f"🎯 Ожидается найти ~{expected_count} уникальных маркеров")
+    print("🚀 ТЕСТИРОВАНИЕ ДЕТЕКЦИИ ARUCO МАРКЕРОВ")
+    print("=" * 50)
+    print(f"📂 Директория: {directory}")
+    print(f"💾 Результаты будут сохранены в: {output_file}")
+    print("=" * 50)
     
-    detector = EnhancedArUcoDetector(enable_logging=True, debug_mode=debug_mode)
+    # Создание детектора
+    detector = SimpleArUcoDetector(enable_logging=True)
     
     # Детекция
-    detections = detector.detect_from_directory(directory)
+    detections = detector.detect_markers_in_directory(directory)
     
-    # Анализ результатов
-    detector.print_detection_summary(detections)
+    # Сохранение результатов
+    if detections:
+        detector.save_results_to_json(detections, output_file)
     
-    # Проверка на ожидаемое количество
-    unique_markers = set()
-    for camera_detections in detections.values():
-        unique_markers.update(camera_detections.keys())
-    
-    if len(unique_markers) >= expected_count:
-        print(f"\n✅ Успех! Найдено {len(unique_markers)} уникальных маркеров")
-    else:
-        print(f"\n⚠️  Внимание: найдено только {len(unique_markers)} из {expected_count} ожидаемых маркеров")
-    
+    # Возврат результатов
     return detections
 
 
-# Функция тестирования модуля
-def test_detector():
-    """Тест детектора ArUco маркеров"""
+# Функция для тестирования модуля
+def main():
+    """Функция для прямого запуска модуля"""
+    import argparse
     
-    print("🧪 ТЕСТ ДЕТЕКТОРА ARUCO МАРКЕРОВ")
-    print("=" * 40)
+    parser = argparse.ArgumentParser(
+        description="Простая детекция ArUco маркеров (на основе test.py)"
+    )
     
-    # Создание тестового детектора
-    detector = EnhancedArUcoDetector(enable_logging=True, debug_mode=True)
+    parser.add_argument(
+        '--input', '-i',
+        default='data',
+        help='Директория с изображениями (по умолчанию: data)'
+    )
     
-    # Тест параметров
-    params = detector.parameters
-    print(f"✓ Параметры детекции настроены")
-    print(f"  - Словарь: DICT_4X4_50")
-    print(f"  - Метод уточнения углов: {params.cornerRefinementMethod}")
-    print(f"  - Мин. размер периметра: {params.minMarkerPerimeterRate}")
+    parser.add_argument(
+        '--output', '-o',
+        default='detection_results.json',
+        help='Файл для сохранения результатов (по умолчанию: detection_results.json)'
+    )
     
-    # Тест предобработки (создаем тестовое изображение)
-    test_image = np.random.randint(0, 255, (1000, 1000, 3), dtype=np.uint8)
-    processed = detector.preprocess_image(test_image)
+    parser.add_argument(
+        '--dictionary',
+        choices=['4x4_50', '4x4_100', '4x4_250', '4x4_1000'],
+        default='4x4_1000',
+        help='Словарь ArUco (по умолчанию: 4x4_1000 как в test.py)'
+    )
     
-    print(f"✓ Предобработка изображения работает")
-    print(f"  - Входной размер: {test_image.shape}")
-    print(f"  - Выходной размер: {processed.shape}")
+    args = parser.parse_args()
     
-    print(f"\n✅ Все тесты пройдены!")
+    # Преобразование названия словаря в константу
+    dict_mapping = {
+        '4x4_50': cv2.aruco.DICT_4X4_50,
+        '4x4_100': cv2.aruco.DICT_4X4_100,
+        '4x4_250': cv2.aruco.DICT_4X4_250,
+        '4x4_1000': cv2.aruco.DICT_4X4_1000,
+    }
+    
+    dictionary_type = dict_mapping[args.dictionary]
+    
+    # Проверка входной директории
+    if not os.path.exists(args.input):
+        print(f"❌ Директория не найдена: {args.input}")
+        return 1
+    
+    # Запуск детекции
+    detector = SimpleArUcoDetector(dictionary_type, enable_logging=True)
+    detections = detector.detect_markers_in_directory(args.input)
+    
+    if detections:
+        detector.save_results_to_json(detections, args.output)
+        print(f"\n✅ Детекция завершена успешно!")
+        
+        # Проверка готовности для триангуляции
+        stats = detector.get_detection_statistics()
+        triangulatable_markers = sum(
+            1 for marker_id in stats['unique_marker_ids']
+            if sum(1 for detections in detections.values() if marker_id in detections) >= 3
+        )
+        
+        print(f"\n🎯 Готовность для 3D триангуляции:")
+        print(f"   Маркеров видимых на ≥3 камерах: {triangulatable_markers}")
+        
+        if triangulatable_markers >= 5:
+            print("   ✅ Отлично! Можно переходить к триангуляции")
+        elif triangulatable_markers >= 3:
+            print("   ⚠️  Достаточно для базовой триангуляции")
+        else:
+            print("   ❌ Недостаточно для надежной триангуляции")
+    else:
+        print(f"\n❌ Маркеры не найдены")
+        return 1
+    
+    return 0
 
 
 if __name__ == "__main__":
-    test_detector()
+    exit(main())
