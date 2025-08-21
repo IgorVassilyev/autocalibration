@@ -26,6 +26,34 @@ class XMPToOpenCVConverter:
         """
         self.sensor_width_35mm = sensor_width_35mm
     
+# xmp_to_opencv.py - Преобразование XMP → OpenCV параметры
+
+"""
+ПРЕОБРАЗОВАНИЕ #1: RealityCapture XMP → OpenCV
+==============================================
+
+Преобразует параметры камеры из формата RealityCapture XMP
+в формат матрицы камеры OpenCV с учетом размеров изображения.
+
+Основная функция:
+- convert_cameras_to_opencv(xmp_cameras, image_size) → opencv_cameras
+"""
+
+import numpy as np
+from typing import Dict, Tuple
+
+class XMPToOpenCVConverter:
+    """Конвертер параметров камеры: XMP → OpenCV"""
+    
+    def __init__(self, sensor_width_35mm: float = 36.0):
+        """
+        Parameters:
+        -----------
+        sensor_width_35mm : float
+            Ширина стандартного полнокадрового сенсора в мм
+        """
+        self.sensor_width_35mm = sensor_width_35mm
+    
     def convert_single_camera(self, camera_id: str, xmp_data: Dict, 
                             image_size: Tuple[int, int]) -> Dict:
         """
@@ -71,6 +99,10 @@ class XMPToOpenCVConverter:
             [     0.0,      0.0,      1.0]
         ])
         
+        # === СОХРАНЯЕМ ОРИГИНАЛЬНЫЕ ДАННЫЕ ===
+        position = np.array(xmp_data['position'])
+        rotation = np.array(xmp_data['rotation'])
+        
         # === ВАЛИДАЦИЯ РЕЗУЛЬТАТОВ ===
         validation_warnings = self._validate_opencv_params(
             fx_pixels, fy_pixels, cx_pixels, cy_pixels, 
@@ -89,8 +121,8 @@ class XMPToOpenCVConverter:
             'image_size': image_size,
             
             # Пространственные данные из XMP
-            'position': np.array(xmp_data['position']),
-            'rotation': np.array(xmp_data['rotation']),
+            'position': position,
+            'rotation': rotation,
             
             # Метаданные преобразования
             'original_focal_35mm': focal_length_35mm,
