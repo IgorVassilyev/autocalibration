@@ -8,7 +8,7 @@
 2. Конвертация в OpenCV формат
 3. Детекция ArUco маркеров (DICT_4X4_1000, ID 1-13)
 4. 3D триангуляция маркеров
-5. Подготовка данных для экспорта в Blender
+5. Подготовка данных для импорта через Blender addon
 
 Использование:
     python main.py
@@ -150,7 +150,7 @@ def triangulate_all_markers(opencv_cameras, marker_detections):
     triangulated_markers = triangulate_markers(
         opencv_cameras,
         marker_detections,
-        min_cameras=3,
+        min_cameras=0,
         max_reprojection_error=2.0
     )
     
@@ -177,168 +177,110 @@ def triangulate_all_markers(opencv_cameras, marker_detections):
 
 
 def create_blender_files(triangulated_markers, output_dir: str):
-    """Этап 5: Подготовка данных для экспорта в Blender"""
-    print("🎨 Этап 5: Подготовка для Blender")
+    """Этап 5: Подготовка данных для Blender addon"""
+    print("🎨 Этап 5: Подготовка для Blender addon")
     
     # Подготовка данных
     blender_data = prepare_blender_export(triangulated_markers)
     
-    # Сохранение данных для Blender
+    # Добавляем метаданные для addon
+    blender_data['metadata']['created_by'] = 'ArUco Autocalibration Pipeline'
+    blender_data['metadata']['format_version'] = '1.0'
+    blender_data['metadata']['addon_compatible'] = True
+    
+    # Сохранение данных для Blender addon
     blender_file = os.path.join(output_dir, 'blender_aruco_markers.json')
     with open(blender_file, 'w', encoding='utf-8') as f:
         json.dump(blender_data, f, indent=2, ensure_ascii=False)
     
-    # Создание скрипта для Blender
-    blender_script = f'''import bpy
-import json
-import os
+    # Создание инструкции по установке addon
+    addon_instructions = """
+# ArUco Markers Blender Addon - Инструкция по установке
 
-def import_aruco_markers():
-    """Импорт ArUco маркеров в Blender как Empty объекты"""
-    
-    # ИСПРАВЛЕННЫЙ ПОИСК ФАЙЛА
-    # Ищем файл в нескольких местах
-    possible_paths = [
-        # 1. В той же папке где находится этот скрипт
-        os.path.join(os.path.dirname(__file__), "blender_aruco_markers.json") if __name__ != "__main__" else None,
-        
-        # 2. В директории blend файла (если файл сохранен)
-        os.path.join(os.path.dirname(bpy.data.filepath), "blender_aruco_markers.json") if bpy.data.filepath else None,
-        
-        # 3. В текущей рабочей директории
-        os.path.join(os.getcwd(), "blender_aruco_markers.json"),
-        
-        # 4. В папке results от текущей директории
-        os.path.join(os.getcwd(), "results", "blender_aruco_markers.json"),
-        
-        # 5. На рабочем столе (если пользователь туда скопировал)
-        os.path.join(os.path.expanduser("~"), "Desktop", "blender_aruco_markers.json"),
-        
-        # 6. Абсолютный путь к проекту
-        r"C:\\Users\\admin\\PycharmProjects\\autocalibration\\results\\blender_aruco_markers.json"
-    ]
-    
-    # Ищем файл
-    data_file = None
-    for path in possible_paths:
-        if path and os.path.exists(path):
-            data_file = path
-            break
-    
-    if not data_file:
-        print("❌ Файл blender_aruco_markers.json не найден!")
-        print("🔍 Искали в следующих местах:")
-        for path in possible_paths:
-            if path:
-                print(f"   - {{path}}")
-        print("\\n💡 Решение:")
-        print("   1. Скопируйте blender_aruco_markers.json в папку с .blend файлом")
-        print("   2. Или скопируйте в папку Blender")
-        print("   3. Или измените путь в строке 21 этого скрипта")
-        return
-    
-    print(f"✅ Найден файл: {{data_file}}")
-    
-    # Загрузка данных
-    try:
-        with open(data_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    except Exception as e:
-        print(f"❌ Ошибка чтения файла: {{e}}")
-        return
-    
-    # Очистка существующих ArUco маркеров
-    bpy.ops.object.select_all(action='DESELECT')
-    for obj in bpy.data.objects:
-        if obj.name.startswith('ArUco_Marker_'):
-            obj.select_set(True)
-    bpy.ops.object.delete()
-    
-    # Создание коллекции для маркеров
-    collection_name = "ArUco_Markers"
-    if collection_name in bpy.data.collections:
-        bpy.data.collections.remove(bpy.data.collections[collection_name])
-    
-    collection = bpy.data.collections.new(collection_name)
-    bpy.context.scene.collection.children.link(collection)
-    
-    # Импорт маркеров
-    markers_data = data['markers']
-    total_markers = len(markers_data)
-    high_quality_count = 0
-    
-    print(f"🎯 Импортируем {{total_markers}} ArUco маркеров...")
-    
-    for marker_name, marker_info in markers_data.items():
-        marker_id = marker_info['id']
-        position = marker_info['position']
-        confidence = marker_info['confidence']
-        quality = marker_info['quality']
-        
-        # Создание Empty объекта
-        bpy.ops.object.empty_add(
-            type='PLAIN_AXES',
-            location=(position[0], position[1], position[2])
-        )
-        
-        empty_obj = bpy.context.active_object
-        empty_obj.name = f"ArUco_Marker_{{marker_id:02d}}"
-        
-        # Размер в зависимости от качества
-        if quality == 'high':
-            empty_obj.empty_display_size = 0.1
-            high_quality_count += 1
-        elif quality == 'medium':
-            empty_obj.empty_display_size = 0.08
-        else:
-            empty_obj.empty_display_size = 0.06
-        
-        # Цвет в зависимости от качества
-        if quality == 'high':
-            empty_obj.color = (0.0, 1.0, 0.0, 1.0)  # Зеленый
-        elif quality == 'medium':
-            empty_obj.color = (1.0, 1.0, 0.0, 1.0)  # Желтый
-        else:
-            empty_obj.color = (1.0, 0.5, 0.0, 1.0)  # Оранжевый
-        
-        # Добавление кастомных свойств
-        empty_obj["aruco_id"] = marker_id
-        empty_obj["confidence"] = confidence
-        empty_obj["quality"] = quality
-        
-        # ИСПРАВЛЕННОЕ добавление в коллекцию
-        # Убираем из Scene Collection только если объект там есть
-        if empty_obj.name in bpy.context.scene.collection.objects:
-            bpy.context.scene.collection.objects.unlink(empty_obj)
-        
-        # Добавляем в нашу коллекцию
-        collection.objects.link(empty_obj)
-    
-    print(f"✅ Импорт завершен!")
-    print(f"   📊 Всего маркеров: {{total_markers}}")
-    print(f"   ⭐ Высокого качества: {{high_quality_count}}")
-    print(f"   📁 Коллекция: {{collection_name}}")
-    print(f"")
-    print(f"🎨 Цветовая схема:")
-    print(f"   🟢 Зеленый - высокое качество (confidence ≥ 0.7)")
-    print(f"   🟡 Желтый - среднее качество (confidence 0.5-0.7)")
-    print(f"   🟠 Оранжевый - низкое качество (confidence < 0.5)")
-    print(f"")
-    print(f"💡 Совет: Маркеры имеют кастомные свойства с данными о триангуляции")
+## Установка addon:
 
-# Запуск импорта
-if __name__ == "__main__":
-    import_aruco_markers()
-'''
+1. **Сохраните файл addon:**
+   - Сохраните код addon как `aruco_importer.py`
+   - Можно скачать с репозитория проекта
+
+2. **Установите в Blender:**
+   - Откройте Blender
+   - Edit → Preferences → Add-ons
+   - Install... → выберите `aruco_importer.py`
+   - Поставьте галочку для активации addon
+
+3. **Использование:**
+   - В 3D Viewport нажмите N (боковая панель)
+   - Появится вкладка "ArUco"
+   - Нажмите "Auto Find" или выберите файл blender_aruco_markers.json
+   - Нажмите "Import Markers"
+
+## Настройки addon:
+
+- **Размер маркеров**: Размер Empty объектов
+- **Размер по качеству**: Автоматический размер по уверенности триангуляции
+- **Цвет по качеству**: Цветовая схема по качеству
+- **Фильтры качества**: Импорт только высококачественных маркеров
+- **Настройки коллекции**: Управление организацией маркеров
+
+## Цветовая схема:
+
+- 🟢 **Зеленый** - высокое качество (confidence ≥ 0.7)
+- 🟡 **Желтый** - среднее качество (confidence 0.5-0.7)  
+- 🟠 **Оранжевый** - низкое качество (confidence < 0.5)
+
+## Дополнительные функции:
+
+- **Preview Meshes**: Создание mesh представления маркеров
+- **Информация о маркерах**: Просмотр свойств выбранных маркеров
+- **Автопоиск файлов**: Addon автоматически ищет файл данных
+
+## Кастомные свойства маркеров:
+
+Каждый импортированный маркер содержит:
+- `aruco_id`: ID маркера
+- `confidence`: Уверенность триангуляции (0-1)
+- `quality`: Качество ('high', 'medium', 'low')
+- `triangulated_position`: 3D координаты
+
+---
+
+💡 **Совет**: Рекомендуется импортировать только маркеры высокого качества (confidence ≥ 0.7) для наиболее точных результатов.
+"""
     
-    script_file = os.path.join(output_dir, 'import_aruco_markers.py')
-    with open(script_file, 'w', encoding='utf-8') as f:
-        f.write(blender_script)
+    instructions_file = os.path.join(output_dir, 'blender_addon_instructions.md')
+    with open(instructions_file, 'w', encoding='utf-8') as f:
+        f.write(addon_instructions)
     
-    print(f"   💾 Данные маркеров: {blender_file}")
-    print(f"   💾 Скрипт Blender: {script_file}")
+    # Сохраняем также статистику для отладки
+    stats = {
+        'triangulation_stats': {
+            'total_markers': len(triangulated_markers),
+            'high_quality': sum(1 for m in triangulated_markers.values() if m.triangulation_confidence >= 0.7),
+            'medium_quality': sum(1 for m in triangulated_markers.values() if 0.5 <= m.triangulation_confidence < 0.7),
+            'low_quality': sum(1 for m in triangulated_markers.values() if m.triangulation_confidence < 0.5),
+            'avg_reprojection_error': sum(m.reprojection_error for m in triangulated_markers.values()) / len(triangulated_markers),
+            'marker_details': {
+                str(marker_id): {
+                    'position': list(result.position_3d),
+                    'confidence': result.triangulation_confidence,
+                    'error': result.reprojection_error,
+                    'cameras': result.camera_ids
+                }
+                for marker_id, result in triangulated_markers.items()
+            }
+        }
+    }
     
-    return blender_file, script_file
+    stats_file = os.path.join(output_dir, 'triangulation_stats.json')
+    with open(stats_file, 'w', encoding='utf-8') as f:
+        json.dump(stats, f, indent=2, ensure_ascii=False)
+    
+    print(f"   💾 Данные для addon: {blender_file}")
+    print(f"   📖 Инструкции: {instructions_file}")
+    print(f"   📊 Статистика: {stats_file}")
+    
+    return blender_file, instructions_file, stats_file
 
 
 def main():
@@ -349,7 +291,7 @@ def main():
     
     print("🚀 ArUco Автокалибровка - Полный пайплайн")
     print("=" * 50)
-    print("От XMP файлов до 3D координат в Blender")
+    print("От XMP файлов до Blender addon импорта")
     print("=" * 50)
     
     # Создание выходной директории
@@ -374,8 +316,8 @@ def main():
         # Этап 4: Триангуляция
         triangulated_markers = triangulate_all_markers(opencv_cameras, marker_detections)
         
-        # Этап 5: Подготовка для Blender
-        blender_file, script_file = create_blender_files(triangulated_markers, OUTPUT_DIR)
+        # Этап 5: Подготовка для Blender addon
+        blender_file, instructions_file, stats_file = create_blender_files(triangulated_markers, OUTPUT_DIR)
         
         # Финальный результат
         execution_time = time.time() - start_time
@@ -383,13 +325,25 @@ def main():
         print(f"\n🎉 ПАЙПЛАЙН ЗАВЕРШЕН УСПЕШНО!")
         print(f"⏱️  Время выполнения: {execution_time:.1f} сек")
         print(f"🎨 Триангулировано маркеров: {len(triangulated_markers)}")
+        
+        # Детальная статистика по качеству
+        high_quality = sum(1 for m in triangulated_markers.values() if m.triangulation_confidence >= 0.7)
+        medium_quality = sum(1 for m in triangulated_markers.values() if 0.5 <= m.triangulation_confidence < 0.7)
+        low_quality = sum(1 for m in triangulated_markers.values() if m.triangulation_confidence < 0.5)
+        
+        print(f"   🟢 Высокого качества: {high_quality}")
+        print(f"   🟡 Среднего качества: {medium_quality}")
+        print(f"   🟠 Низкого качества: {low_quality}")
+        
         print(f"📂 Результаты в: {OUTPUT_DIR}")
         print(f"")
-        print(f"🎬 Следующий шаг - Blender:")
-        print(f"   1. Откройте Blender")
-        print(f"   2. Scripting → Open → {script_file}")
-        print(f"   3. Run Script")
-        print(f"   4. Маркеры появятся как Empty объекты")
+        print(f"🎬 Следующие шаги:")
+        print(f"   1. Установите Blender addon (см. {os.path.basename(instructions_file)})")
+        print(f"   2. В Blender: N → ArUco → Import Markers")
+        print(f"   3. Маркеры появятся как Empty объекты с цветовой кодировкой")
+        print(f"")
+        print(f"💡 Рекомендация: Импортируйте только маркеры высокого качества")
+        print(f"   для наиболее точных результатов (≥{high_quality} маркеров доступно)")
         
         return 0
         
