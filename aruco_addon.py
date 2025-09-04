@@ -1,946 +1,645 @@
 #!/usr/bin/env python3
 """
-ArUco Markers + Cameras Importer - Blender Addon
-================================================
+ArUco Simple Addon - Аддон без OpenCV
+====================================
 
-Addon для импорта ArUco маркеров и камер в Blender из файлов автокалибровки.
+Простой аддон для импорта камер и маркеров в Blender:
+1. Импорт камер из XMP файлов (без зависимостей)
+2. Импорт маркеров из готового JSON файла (созданного main.py)
 
 Установка:
-1. Сохраните как aruco_importer.py
+1. Сохраните как aruco_addon_simple.py
 2. Blender → Edit → Preferences → Add-ons → Install
-3. Выберите файл и активируйте addon
-4. Панель появится в 3D Viewport → N → ArUco
+3. Активируйте "ArUco Simple Addon"
 
 Использование:
-1. Запустите main.py для создания blender_aruco_markers.json
-2. В Blender откройте панель ArUco (N → ArUco)
-3. Выберите что импортировать и нажмите "Import Scene"
+- Сначала запустите main.py для создания JSON с маркерами
+- Затем используйте аддон для импорта в Blender
 """
 
 bl_info = {
-    "name": "ArUco Markers + Cameras Importer",
+    "name": "ArUco Simple Addon",
     "author": "ArUco Autocalibration Project", 
-    "version": (2, 0, 0),
+    "version": (1, 0, 0),
     "blender": (3, 0, 0),
-    "location": "3D Viewport → Sidebar → ArUco",
-    "description": "Import 3D ArUco markers and cameras from autocalibration pipeline",
+    "location": "3D Viewport → Sidebar → ArUco Simple",
+    "description": "Import cameras from XMP and markers from JSON (no OpenCV required)",
     "category": "Import-Export",
-    "doc_url": "https://github.com/your-project/aruco-autocalibration",
 }
 
 import bpy
-import json
 import os
-import bmesh
+import json
+import xml.etree.ElementTree as ET
 from mathutils import Matrix, Vector
-from bpy.props import (
-    StringProperty, 
-    BoolProperty, 
-    FloatProperty, 
-    EnumProperty,
-    IntProperty
-)
+from bpy.props import StringProperty, BoolProperty, FloatProperty, EnumProperty
 from bpy.types import Panel, Operator, PropertyGroup
 from bpy_extras.io_utils import ImportHelper
+import traceback
 
+# =============================================================================
+# ПАРСЕР XMP (БЕЗ ЗАВИСИМОСТЕЙ)
+# =============================================================================
 
-class ArUcoImporterProperties(PropertyGroup):
-    """Настройки импорта ArUco маркеров и камер"""
+class SimpleXMPParser:
+    """Простой парсер XMP файлов без зависимостей"""
     
-    # Путь к файлу данных
-    filepath: StringProperty(
-        name="Файл данных",
-        description="Путь к файлу blender_aruco_markers.json",
+    def __init__(self):
+        self.RC_NS = {
+            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#", 
+            "xcr": "http://www.capturingreality.com/ns/xcr/1.1#"
+        }
+    
+    def _floats(self, s):
+        """Безопасное преобразование в список чисел"""
+        if not s or s.strip() == "":
+            return []
+        try:
+            return [float(x) for x in str(s).strip().split()]
+        except:
+            return []
+    
+    def parse_xmp_file(self, xmp_path):
+        """Парсинг одного XMP файла"""
+        try:
+            tree = ET.parse(xmp_path)
+            root = tree.getroot()
+            
+            desc = root.find(".//rdf:Description", self.RC_NS)
+            if desc is None:
+                return None
+            
+            # Извлечение данных
+            pos_elem = desc.find("xcr:Position", self.RC_NS)
+            rot_elem = desc.find("xcr:Rotation", self.RC_NS)
+            
+            pos = self._floats(pos_elem.text if pos_elem is not None else "")
+            rot = self._floats(rot_elem.text if rot_elem is not None else "")
+            
+            # Атрибуты
+            attrs = {}
+            for key, value in desc.attrib.items():
+                if key.startswith('{' + self.RC_NS['xcr'] + '}'):
+                    attr_name = key.split('}')[1]
+                    attrs[attr_name] = value
+            
+            # Валидация
+            if len(pos) != 3 or len(rot) != 9:
+                return None
+            
+            return {
+                'name': os.path.splitext(os.path.basename(xmp_path))[0],
+                'position': pos,
+                'rotation': rot,
+                'focal_length': float(attrs.get('FocalLength35mm', 35.0)),
+                'principal_point_u': float(attrs.get('PrincipalPointU', 0.0)),
+                'principal_point_v': float(attrs.get('PrincipalPointV', 0.0)),
+                'attrs': attrs
+            }
+            
+        except Exception as e:
+            print(f"Error parsing {xmp_path}: {e}")
+            return None
+    
+    def load_all_cameras(self, directory):
+        """Загрузка всех камер из папки"""
+        cameras = {}
+        
+        if not os.path.exists(directory):
+            return cameras
+        
+        xmp_files = [f for f in os.listdir(directory) if f.lower().endswith('.xmp')]
+        
+        for xmp_file in sorted(xmp_files):
+            xmp_path = os.path.join(directory, xmp_file)
+            data = self.parse_xmp_file(xmp_path)
+            if data:
+                cameras[data['name']] = data
+        
+        return cameras
+
+# =============================================================================
+# СВОЙСТВА АДДОНА
+# =============================================================================
+
+class ArUcoSimpleProperties(PropertyGroup):
+    """Свойства простого аддона"""
+    
+    # Пути
+    xmp_folder: StringProperty(
+        name="Папка XMP",
+        description="Папка с XMP файлами RealityCapture",
+        default="",
+        subtype='DIR_PATH'
+    )
+    
+    markers_json: StringProperty(
+        name="Файл маркеров JSON",
+        description="JSON файл с маркерами (создается main.py)",
         default="",
         subtype='FILE_PATH'
     )
     
-    # Что импортировать
+    # Настройки отображения
     import_cameras: BoolProperty(
-        name="Импорт камер",
-        description="Импортировать камеры из RealityCapture",
+        name="Импортировать камеры",
+        description="Импортировать камеры из XMP файлов",
         default=True
     )
     
     import_markers: BoolProperty(
-        name="Импорт маркеров", 
-        description="Импортировать ArUco маркеры",
+        name="Импортировать маркеры", 
+        description="Импортировать маркеры из JSON файла",
         default=True
     )
     
-    # === НАСТРОЙКИ КАМЕР ===
-    camera_size: FloatProperty(
-        name="Размер камер",
-        description="Размер отображения объектов камер",
-        default=0.2,
-        min=0.01,
-        max=2.0
-    )
-    
-    show_frustum: BoolProperty(
-        name="Показать frustum",
-        description="Отображать пирамиду видимости камеры",
-        default=True
-    )
-    
-    frustum_scale: FloatProperty(
-        name="Масштаб frustum",
-        description="Размер пирамиды видимости",
-        default=1.0,
-        min=0.1,
-        max=5.0
-    )
-    
-    camera_color_by_quality: BoolProperty(
-        name="Цвет камер по качеству",
-        description="Раскрашивать камеры по качеству калибровки",
-        default=True
-    )
-    
-    # === НАСТРОЙКИ МАРКЕРОВ ===
     marker_size: FloatProperty(
         name="Размер маркеров",
         description="Размер Empty объектов маркеров",
         default=0.1,
-        min=0.01,
-        max=1.0
+        min=0.01, max=1.0
     )
     
     size_by_quality: BoolProperty(
         name="Размер по качеству",
-        description="Изменять размер в зависимости от качества триангуляции",
+        description="Изменять размер в зависимости от качества",
         default=True
     )
     
     color_by_quality: BoolProperty(
-        name="Цвет по качеству", 
-        description="Раскрашивать маркеры по качеству триангуляции",
+        name="Цвет по качеству",
+        description="Раскрашивать маркеры по качеству",
         default=True
-    )
-    
-    # Фильтры качества маркеров
-    import_low_quality: BoolProperty(
-        name="Импорт низкого качества",
-        description="Импортировать маркеры с низким качеством триангуляции",
-        default=True
-    )
-    
-    min_confidence: FloatProperty(
-        name="Мин. уверенность",
-        description="Минимальная уверенность триангуляции (0-1)",
-        default=0.0,
-        min=0.0,
-        max=1.0
-    )
-    
-    # Отображение объектов
-    empty_type: EnumProperty(
-        name="Тип Empty маркеров",
-        description="Тип Empty объекта для маркеров",
-        items=[
-            ('PLAIN_AXES', 'Оси', 'Простые оси'),
-            ('ARROWS', 'Стрелки', 'Стрелки'),
-            ('SINGLE_ARROW', 'Одна стрелка', 'Одна стрелка'),
-            ('CIRCLE', 'Круг', 'Круг'),
-            ('CUBE', 'Куб', 'Куб'),
-            ('SPHERE', 'Сфера', 'Сфера'),
-            ('CONE', 'Конус', 'Конус'),
-        ],
-        default='PLAIN_AXES'
-    )
-    
-    # Настройки коллекций
-    cameras_collection_name: StringProperty(
-        name="Коллекция камер",
-        description="Имя коллекции для камер",
-        default="RC_Cameras"
-    )
-    
-    markers_collection_name: StringProperty(
-        name="Коллекция маркеров",
-        description="Имя коллекции для маркеров",
-        default="ArUco_Markers"
     )
     
     clear_existing: BoolProperty(
         name="Очистить существующие",
-        description="Удалить существующие объекты перед импортом",
+        description="Удалить предыдущие данные перед импортом",
         default=True
     )
 
+# =============================================================================
+# ОПЕРАТОРЫ
+# =============================================================================
 
-# === ФУНКЦИИ ИЗ ОРИГИНАЛЬНОГО СКРИПТА ===
-
-def to_blender_cam_matrix(R_w2cv_3x3, C_world_vec3):
-    """Преобразование матрицы камеры из OpenCV в Blender формат"""
-    # OpenCV: +X right, +Y down, +Z forward
-    # Blender cam: +X right, +Y up, +Z backward (looks along -Z)
-    R_bcam2cv = Matrix(((1,0,0),(0,-1,0),(0,0,-1)))
-    R_cv2bcam = R_bcam2cv.transposed()
-
-    # world -> blender_cam
-    R_w2bcam = R_cv2bcam @ R_w2cv_3x3
-
-    # Blender needs object matrix (local->world): invert rotation to get blender_cam->world
-    R_bcam2w = R_w2bcam.transposed()  # rotation, so inverse == transpose
-
-    # Build 4x4 safely
-    M = R_bcam2w.to_4x4()
-    M.translation = Vector(C_world_vec3)
-    return M
-
-
-def ensure_collection(name):
-    """Создание или получение коллекции"""
-    coll = bpy.data.collections.get(name)
-    if not coll:
-        coll = bpy.data.collections.new(name)
-        bpy.context.scene.collection.children.link(coll)
-    return coll
-
-
-class ARUCO_OT_import_scene(Operator, ImportHelper):
-    """Импорт камер и ArUco маркеров из JSON файла"""
+class ARUCO_OT_simple_import(Operator):
+    """Простой импорт камер и маркеров"""
     
-    bl_idname = "aruco.import_scene"
-    bl_label = "Import Scene"
-    bl_description = "Импорт камер и 3D позиций ArUco маркеров в Blender"
+    bl_idname = "aruco.simple_import"
+    bl_label = "Импортировать"
+    bl_description = "Импорт камер из XMP и маркеров из JSON"
     bl_options = {'REGISTER', 'UNDO'}
     
-    # Фильтр файлов
-    filename_ext = ".json"
-    filter_glob: StringProperty(
-        default="*.json",
-        options={'HIDDEN'},
-        maxlen=255,
-    )
-    
     def execute(self, context):
-        """Основная функция импорта"""
-        
-        props = context.scene.aruco_importer
-        
-        print(f"\n🚀 Начинаем импорт сцены ArUco")
-        print(f"   Импорт камер: {props.import_cameras}")
-        print(f"   Импорт маркеров: {props.import_markers}")
-        
-        # Используем выбранный файл или из настроек
-        data_file = self.filepath if hasattr(self, 'filepath') and self.filepath else props.filepath
-        print(f"   Файл данных: {data_file}")
-        
-        if not data_file:
-            # Автопоиск файла
-            data_file = self.find_data_file()
-            print(f"   Автопоиск результат: {data_file}")
-        
-        if not data_file or not os.path.exists(data_file):
-            self.report({'ERROR'}, f"Файл данных не найден: {data_file}")
-            return {'CANCELLED'}
-        
-        # Обновляем путь в настройках
-        props.filepath = data_file
+        props = context.scene.aruco_simple_props
         
         try:
-            # Загрузка данных
-            print(f"📖 Загрузка данных из файла...")
-            with open(data_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            # Очистка существующих данных
+            if props.clear_existing:
+                self.clear_existing()
             
-            print(f"   Ключи в данных: {list(data.keys())}")
-            
-            # Настройка единиц измерения
-            bpy.context.scene.unit_settings.system = 'METRIC'
-            bpy.context.scene.unit_settings.scale_length = 1.0
-            print(f"   Единицы измерения настроены: METRIC")
-            
-            # Результаты импорта
-            result = {'cameras_imported': 0, 'markers_imported': 0, 'success': True, 'error': ''}
+            imported_cameras = 0
+            imported_markers = 0
             
             # Импорт камер
-            if props.import_cameras:
-                if 'cameras' in data:
-                    print(f"\n📷 ИМПОРТ КАМЕР")
-                    print(f"   Найдено камер в данных: {len(data['cameras'])}")
-                    camera_result = self.import_cameras_from_data(data['cameras'], props)
-                    result['cameras_imported'] = camera_result['imported']
-                    if not camera_result['success']:
-                        result['success'] = False
-                        result['error'] += f"Камеры: {camera_result['error']}; "
-                else:
-                    print(f"   ⚠️  Данные камер не найдены в файле")
-                    result['error'] += "Камеры: данные не найдены; "
+            if props.import_cameras and props.xmp_folder and os.path.exists(props.xmp_folder):
+                imported_cameras = self.import_cameras(props.xmp_folder)
             
             # Импорт маркеров
-            if props.import_markers:
-                if 'markers' in data:
-                    print(f"\n🎯 ИМПОРТ МАРКЕРОВ")
-                    print(f"   Найдено маркеров в данных: {len(data['markers'])}")
-                    marker_result = self.import_markers_from_data(data['markers'], props)
-                    result['markers_imported'] = marker_result['imported']
-                    if not marker_result['success']:
-                        result['success'] = False
-                        result['error'] += f"Маркеры: {marker_result['error']}; "
-                else:
-                    print(f"   ⚠️  Данные маркеров не найдены в файле")
-                    result['error'] += "Маркеры: данные не найдены; "
+            if props.import_markers and props.markers_json and os.path.exists(props.markers_json):
+                imported_markers = self.import_markers(props.markers_json, props)
             
-            print(f"\n🎉 ИМПОРТ ЗАВЕРШЕН")
-            print(f"   Камер импортировано: {result['cameras_imported']}")
-            print(f"   Маркеров импортировано: {result['markers_imported']}")
-            print(f"   Успех: {result['success']}")
-            if result['error']:
-                print(f"   Ошибки: {result['error']}")
+            # Результат
+            self.report({'INFO'}, 
+                f"Импортировано: {imported_cameras} камер, {imported_markers} маркеров"
+            )
             
-            if result['success']:
-                self.report({'INFO'}, 
-                    f"Импорт завершен: камер {result['cameras_imported']}, "
-                    f"маркеров {result['markers_imported']}"
-                )
-                return {'FINISHED'}
-            else:
-                self.report({'ERROR'}, f"Ошибки импорта: {result['error']}")
-                return {'CANCELLED'}
-                
+            return {'FINISHED'}
+            
         except Exception as e:
-            print(f"💥 Критическая ошибка импорта: {e}")
-            import traceback
+            self.report({'ERROR'}, f"Ошибка импорта: {str(e)}")
             traceback.print_exc()
-            self.report({'ERROR'}, f"Ошибка чтения файла: {str(e)}")
             return {'CANCELLED'}
     
-    def find_data_file(self):
-        """Автоматический поиск файла данных"""
+    def clear_existing(self):
+        """Очистка существующих данных"""
+        # Удаляем объекты
+        objects_to_remove = []
+        for obj in bpy.data.objects:
+            if obj.type == 'CAMERA' or obj.name.startswith('ArUco_Marker_'):
+                objects_to_remove.append(obj)
         
-        possible_paths = [
-            # В папке с blend файлом
-            os.path.join(os.path.dirname(bpy.data.filepath), "blender_aruco_markers.json") if bpy.data.filepath else None,
-            os.path.join(os.path.dirname(bpy.data.filepath), "results", "blender_aruco_markers.json") if bpy.data.filepath else None,
-            
-            # В текущей директории
-            os.path.join(os.getcwd(), "blender_aruco_markers.json"),
-            os.path.join(os.getcwd(), "results", "blender_aruco_markers.json"),
-            
-            # На рабочем столе
-            os.path.join(os.path.expanduser("~"), "Desktop", "blender_aruco_markers.json"),
-            os.path.join(os.path.expanduser("~"), "Desktop", "results", "blender_aruco_markers.json"),
-        ]
+        for obj in objects_to_remove:
+            bpy.data.objects.remove(obj, do_unlink=True)
         
-        for path in possible_paths:
-            if path and os.path.exists(path):
-                return path
-        
-        return None
+        # Удаляем коллекции
+        for coll_name in ['RealityCapture_Cameras', 'ArUco_Markers']:
+            if coll_name in bpy.data.collections:
+                bpy.data.collections.remove(bpy.data.collections[coll_name])
     
-    def import_cameras_from_data(self, cameras_data, props):
-        """Импорт камер из загруженных данных"""
-        
-        try:
-            # Очистка существующих камер
-            if props.clear_existing:
-                self.clear_existing_cameras(props.cameras_collection_name)
-            
-            # Создание/получение коллекции
-            collection = ensure_collection(props.cameras_collection_name)
-            
-            imported_count = 0
-            
-            for camera_id, camera_info in cameras_data.items():
-                try:
-                    # Создание камеры
-                    camera_obj = self.create_camera_object(camera_id, camera_info, props)
-                    
-                    if camera_obj:
-                        # Добавление в коллекцию
-                        collection.objects.link(camera_obj)
-                        
-                        # Убираем из Scene Collection
-                        if camera_obj.name in bpy.context.scene.collection.objects:
-                            bpy.context.scene.collection.objects.unlink(camera_obj)
-                        
-                        imported_count += 1
-                        
-                except Exception as e:
-                    print(f"Ошибка создания камеры {camera_id}: {e}")
-                    continue
-            
-            return {'success': True, 'imported': imported_count, 'error': ''}
-            
-        except Exception as e:
-            return {'success': False, 'imported': 0, 'error': str(e)}
+    def ensure_collection(self, name):
+        """Создание или получение коллекции"""
+        coll = bpy.data.collections.get(name)
+        if not coll:
+            coll = bpy.data.collections.new(name)
+            bpy.context.scene.collection.children.link(coll)
+        return coll
     
-    def create_camera_object(self, camera_id, camera_info, props):
-        """Создание объекта камеры в Blender"""
-        
+    def to_blender_cam_matrix(self, R_w2cv_3x3, C_world_vec3):
+        """Преобразование матрицы камеры в Blender"""
         try:
-            pos = camera_info["position"]
-            rot = camera_info["rotation"]  # 9-элементный список (3x3 матрица)
-            attrs = camera_info["attributes"]
-            validation = camera_info.get("validation", {'is_valid': True, 'warnings': [], 'errors': []})
+            # Преобразование координатных систем
+            R_bcam2cv = Matrix(((1,0,0), (0,-1,0), (0,0,-1)))
+            R_cv2bcam = R_bcam2cv.transposed()
             
-            if len(pos) != 3 or len(rot) != 9:
-                print(f"[WARN] Пропускаем {camera_id}: неверный формат Position/Rotation")
-                return None
+            R_w2bcam = R_cv2bcam @ R_w2cv_3x3
+            R_bcam2w = R_w2bcam.transposed()
             
-            # Преобразуем rotation в 3x3 Matrix
-            C_world = Vector(pos)
-            R_w2cv = Matrix((rot[0:3], rot[3:6], rot[6:9]))
+            M = R_bcam2w.to_4x4()
+            M.translation = Vector(C_world_vec3)
             
-            # Создание камеры
-            cam_data_block = bpy.data.cameras.new(name=camera_id+"_DATA")
-            cam_obj = bpy.data.objects.new(name=camera_id, object_data=cam_data_block)
-            
-            # Настройка матрицы трансформации
-            cam_obj.matrix_world = to_blender_cam_matrix(R_w2cv, C_world)
-            
-            # === ВНУТРЕННИЕ ПАРАМЕТРЫ КАМЕРЫ ===
-            f35 = float(attrs.get("FocalLength35mm", 0.0) or 0.0)
-            if f35 > 0:
-                cam_data_block.sensor_fit = 'HORIZONTAL'
-                cam_data_block.sensor_width = 36.0
-                cam_data_block.lens = f35
-            
-            # Главная точка (principal point)
+            return M
+        except:
+            return Matrix()
+    
+    def import_cameras(self, xmp_folder):
+        """Импорт камер из XMP файлов"""
+        parser = SimpleXMPParser()
+        cameras = parser.load_all_cameras(xmp_folder)
+        
+        if not cameras:
+            return 0
+        
+        cameras_collection = self.ensure_collection("RealityCapture_Cameras")
+        imported_count = 0
+        
+        for camera_id, cam_data in cameras.items():
             try:
-                ppu = float(attrs.get("PrincipalPointU", ""))
-                ppv = float(attrs.get("PrincipalPointV", ""))
-                # Если значения малые (<0.05), считаем их смещением от центра
-                if abs(ppu) < 0.05 and abs(ppv) < 0.05:
+                # Создание камеры
+                cam_data_block = bpy.data.cameras.new(camera_id + "_CAM")
+                cam_obj = bpy.data.objects.new(camera_id, cam_data_block)
+                
+                cameras_collection.objects.link(cam_obj)
+                
+                # Матрица трансформации
+                pos = Vector(cam_data['position'])
+                rot_list = cam_data['rotation']
+                rot = Matrix([rot_list[i:i+3] for i in range(0, 9, 3)])
+                
+                cam_obj.matrix_world = self.to_blender_cam_matrix(rot, pos)
+                
+                # Параметры камеры
+                focal_35mm = cam_data['focal_length']
+                if focal_35mm > 0:
+                    cam_data_block.sensor_fit = 'HORIZONTAL'
+                    cam_data_block.sensor_width = 36.0
+                    cam_data_block.lens = focal_35mm
+                
+                # Principal point
+                ppu = cam_data['principal_point_u']
+                ppv = cam_data['principal_point_v']
+                
+                if abs(ppu) < 0.1 and abs(ppv) < 0.1:
                     cam_data_block.shift_x = ppu
                     cam_data_block.shift_y = -ppv
-                else:
-                    # предполагаем диапазон [0..1]
-                    cam_data_block.shift_x = (ppu - 0.5)
-                    cam_data_block.shift_y = -(ppv - 0.5)
-            except Exception:
-                pass
-            
-            # Размер отображения
-            cam_obj.empty_display_size = props.camera_size
-            
-            # === ЦВЕТ ПО КАЧЕСТВУ ===
-            if props.camera_color_by_quality:
-                if not validation['is_valid']:
-                    cam_obj.color = (1.0, 0.0, 0.0, 1.0)  # Красный - ошибки
-                elif validation['warnings']:
-                    cam_obj.color = (1.0, 0.5, 0.0, 1.0)  # Оранжевый - предупреждения
-                else:
-                    cam_obj.color = (0.0, 0.0, 1.0, 1.0)  # Синий - валидная
-            
-            # === КАСТОМНЫЕ СВОЙСТВА ===
-            cam_obj["camera_id"] = camera_id
-            cam_obj["focal_length_35mm"] = f35
-            cam_obj["principal_point"] = [attrs.get("PrincipalPointU", 0.0), attrs.get("PrincipalPointV", 0.0)]
-            cam_obj["distortion_coefficients"] = camera_info.get("distortion", [])
-            cam_obj["rc_attributes"] = attrs
-            cam_obj["validation_status"] = validation
-            
-            # === СОЗДАНИЕ FRUSTUM ===
-            if props.show_frustum:
-                self.create_camera_frustum(cam_obj, props.frustum_scale, attrs)
-            
-            return cam_obj
-            
-        except Exception as e:
-            print(f"Ошибка создания камеры {camera_id}: {e}")
-            return None
-    
-    def create_camera_frustum(self, camera_obj, scale, attrs):
-        """Создание пирамиды видимости камеры"""
-        
-        try:
-            # Получаем параметры камеры
-            focal_length = float(attrs.get("FocalLength35mm", 35.0))
-            aspect_ratio = float(attrs.get("AspectRatio", 1.0))
-            
-            # Создание mesh для frustum
-            mesh = bpy.data.meshes.new(f"{camera_obj.name}_Frustum")
-            frustum_obj = bpy.data.objects.new(f"{camera_obj.name}_Frustum", mesh)
-            
-            # Создание геометрии frustum
-            bm = bmesh.new()
-            
-            # Размеры на единичном расстоянии
-            sensor_width = 36.0  # мм
-            w = (sensor_width / focal_length) * scale
-            h = w / aspect_ratio
-            d = scale
-            
-            # Вершины frustum (пирамида)
-            verts = [
-                (0, 0, 0),      # Центр камеры
-                (-w, -h, -d),   # Левый нижний
-                (w, -h, -d),    # Правый нижний  
-                (w, h, -d),     # Правый верхний
-                (-w, h, -d),    # Левый верхний
-            ]
-            
-            # Создание вершин
-            for v in verts:
-                bm.verts.new(v)
-            
-            bm.verts.ensure_lookup_table()
-            
-            # Создание ребер frustum
-            edges = [
-                (0, 1), (0, 2), (0, 3), (0, 4),  # От центра к углам
-                (1, 2), (2, 3), (3, 4), (4, 1),  # Прямоугольник
-            ]
-            
-            for edge in edges:
-                bm.edges.new([bm.verts[edge[0]], bm.verts[edge[1]]])
-            
-            bm.to_mesh(mesh)
-            bm.free()
-            
-            # Привязываем frustum к камере
-            frustum_obj.parent = camera_obj
-            frustum_obj.parent_type = 'OBJECT'
-            
-            # Настройки отображения
-            frustum_obj.display_type = 'WIRE'
-            frustum_obj.color = camera_obj.color
-            
-            # Добавляем в ту же коллекцию что и камера
-            for collection in camera_obj.users_collection:
-                collection.objects.link(frustum_obj)
                 
-        except Exception as e:
-            print(f"Ошибка создания frustum для {camera_obj.name}: {e}")
+                # Сохраняем данные
+                cam_obj["RC_camera_data"] = str(cam_data['attrs'])
+                
+                imported_count += 1
+                
+            except Exception as e:
+                print(f"Error creating camera {camera_id}: {e}")
+        
+        return imported_count
     
-    def clear_existing_cameras(self, collection_name):
-        """Очистка существующих камер"""
-        
-        # Удаляем объекты камер и frustums
-        bpy.ops.object.select_all(action='DESELECT')
-        for obj in bpy.data.objects:
-            if obj.type == 'CAMERA' or obj.name.endswith('_Frustum'):
-                obj.select_set(True)
-        bpy.ops.object.delete()
-        
-        # Удаляем коллекцию если есть
-        if collection_name in bpy.data.collections:
-            collection = bpy.data.collections[collection_name]
-            bpy.data.collections.remove(collection)
-    
-    def import_markers_from_data(self, markers_data, props):
-        """Импорт маркеров из загруженных данных"""
-        
+    def import_markers(self, json_file, props):
+        """Импорт маркеров из JSON файла"""
         try:
-            # Очистка существующих маркеров
-            if props.clear_existing:
-                self.clear_existing_markers(props.markers_collection_name)
-            
-            # Создание/получение коллекции
-            collection = ensure_collection(props.markers_collection_name)
-            
-            total_markers = len(markers_data)
-            imported_count = 0
-            high_quality_count = 0
-            
-            for marker_name, marker_info in markers_data.items():
+            with open(json_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception as e:
+            print(f"Error reading JSON: {e}")
+            return 0
+        
+        markers_data = data.get('markers', {})
+        if not markers_data:
+            return 0
+        
+        markers_collection = self.ensure_collection("ArUco_Markers")
+        imported_count = 0
+        
+        for marker_name, marker_info in markers_data.items():
+            try:
                 marker_id = marker_info['id']
                 position = marker_info['position']
                 confidence = marker_info['confidence']
                 quality = marker_info.get('quality', 'unknown')
                 
-                # Фильтрация по качеству
-                if confidence < props.min_confidence:
-                    continue
+                # Определение размера и цвета
+                if props.size_by_quality:
+                    if quality == 'high':
+                        size = props.marker_size
+                    elif quality == 'medium':
+                        size = props.marker_size * 0.8
+                    else:
+                        size = props.marker_size * 0.6
+                else:
+                    size = props.marker_size
                 
-                if not props.import_low_quality and quality == 'low':
-                    continue
+                if props.color_by_quality:
+                    if quality == 'high':
+                        color = (0.0, 1.0, 0.0, 1.0)  # Зеленый
+                    elif quality == 'medium':
+                        color = (1.0, 1.0, 0.0, 1.0)  # Желтый
+                    else:
+                        color = (1.0, 0.5, 0.0, 1.0)  # Оранжевый
+                else:
+                    color = (1.0, 1.0, 1.0, 1.0)  # Белый
                 
-                # Создание маркера
-                marker_obj = self.create_marker_object(
-                    marker_id, position, confidence, quality, props
-                )
+                # Создание Empty объекта
+                bpy.ops.object.empty_add(type='PLAIN_AXES', location=tuple(position))
+                marker_obj = bpy.context.active_object
+                marker_obj.name = f"ArUco_Marker_{marker_id:02d}"
+                marker_obj.empty_display_size = size
+                marker_obj.color = color
                 
-                # Добавление в коллекцию
-                collection.objects.link(marker_obj)
+                # Кастомные свойства
+                marker_obj["aruco_id"] = marker_id
+                marker_obj["confidence"] = confidence
+                marker_obj["quality"] = quality
+                marker_obj["triangulated_position"] = position
                 
-                # Убираем из Scene Collection
+                # Перемещение в коллекцию
+                markers_collection.objects.link(marker_obj)
                 if marker_obj.name in bpy.context.scene.collection.objects:
                     bpy.context.scene.collection.objects.unlink(marker_obj)
                 
                 imported_count += 1
-                if quality == 'high':
-                    high_quality_count += 1
-            
-            return {
-                'success': True,
-                'imported': imported_count,
-                'total': total_markers,
-                'high_quality': high_quality_count,
-                'error': ''
-            }
-            
-        except Exception as e:
-            return {
-                'success': False,
-                'imported': 0,
-                'total': 0,
-                'high_quality': 0,
-                'error': str(e)
-            }
-    
-    def clear_existing_markers(self, collection_name):
-        """Очистка существующих ArUco маркеров"""
+                
+            except Exception as e:
+                print(f"Error creating marker {marker_name}: {e}")
         
-        # Удаляем объекты маркеров
-        bpy.ops.object.select_all(action='DESELECT')
-        for obj in bpy.data.objects:
-            if obj.name.startswith('ArUco_Marker_'):
-                obj.select_set(True)
-        bpy.ops.object.delete()
-        
-        # Удаляем коллекцию если есть
-        if collection_name in bpy.data.collections:
-            collection = bpy.data.collections[collection_name]
-            bpy.data.collections.remove(collection)
-    
-    def create_marker_object(self, marker_id, position, confidence, quality, props):
-        """Создание объекта маркера"""
-        
-        # Создание Empty объекта
-        bpy.ops.object.empty_add(
-            type=props.empty_type,
-            location=tuple(position)
-        )
-        
-        marker_obj = bpy.context.active_object
-        marker_obj.name = f"ArUco_Marker_{marker_id:02d}"
-        
-        # Размер в зависимости от настроек
-        if props.size_by_quality:
-            if quality == 'high':
-                size = props.marker_size
-            elif quality == 'medium':
-                size = props.marker_size * 0.8
-            else:
-                size = props.marker_size * 0.6
-        else:
-            size = props.marker_size
-        
-        marker_obj.empty_display_size = size
-        
-        # Цвет в зависимости от качества
-        if props.color_by_quality:
-            if quality == 'high':
-                marker_obj.color = (0.0, 1.0, 0.0, 1.0)  # Зеленый
-            elif quality == 'medium':
-                marker_obj.color = (1.0, 1.0, 0.0, 1.0)  # Желтый
-            else:
-                marker_obj.color = (1.0, 0.5, 0.0, 1.0)  # Оранжевый
-        
-        # Кастомные свойства
-        marker_obj["aruco_id"] = marker_id
-        marker_obj["confidence"] = confidence
-        marker_obj["quality"] = quality
-        marker_obj["triangulated_position"] = position
-        
-        return marker_obj
+        return imported_count
 
-
-class ARUCO_OT_auto_find_file(Operator):
-    """Автоматический поиск файла данных"""
+class ARUCO_OT_select_markers_file(Operator, ImportHelper):
+    """Выбор файла с маркерами"""
     
-    bl_idname = "aruco.auto_find_file"
-    bl_label = "Auto Find"
-    bl_description = "Автоматически найти файл blender_aruco_markers.json"
+    bl_idname = "aruco.select_markers_file"
+    bl_label = "Выбрать файл маркеров"
+    bl_description = "Выбрать JSON файл с маркерами"
+    
+    filename_ext = ".json"
+    filter_glob: StringProperty(default="*.json", options={'HIDDEN'})
     
     def execute(self, context):
-        props = context.scene.aruco_importer
+        context.scene.aruco_simple_props.markers_json = self.filepath
+        return {'FINISHED'}
+
+class ARUCO_OT_auto_find_files(Operator):
+    """Автопоиск файлов"""
+    
+    bl_idname = "aruco.auto_find_files"
+    bl_label = "Автопоиск"
+    bl_description = "Автоматически найти data/ и results/blender_aruco_markers.json"
+    
+    def execute(self, context):
+        props = context.scene.aruco_simple_props
         
-        # Поиск файла
-        importer = ARUCO_OT_import_scene()
-        found_file = importer.find_data_file()
+        # Поиск относительно текущего blend файла или рабочей директории
+        search_paths = []
         
-        if found_file:
-            props.filepath = found_file
-            self.report({'INFO'}, f"Найден файл: {os.path.basename(found_file)}")
+        if bpy.data.filepath:
+            blend_dir = os.path.dirname(bpy.data.filepath)
+            search_paths.append(blend_dir)
+            search_paths.append(os.path.dirname(blend_dir))
+        
+        search_paths.append(os.getcwd())
+        
+        found_data = False
+        found_json = False
+        
+        for base_path in search_paths:
+            # Поиск папки data
+            data_path = os.path.join(base_path, "data")
+            if os.path.exists(data_path) and not found_data:
+                # Проверяем что там есть XMP файлы
+                xmp_files = [f for f in os.listdir(data_path) if f.lower().endswith('.xmp')]
+                if xmp_files:
+                    props.xmp_folder = data_path
+                    found_data = True
+            
+            # Поиск JSON файла
+            json_path = os.path.join(base_path, "results", "blender_aruco_markers.json")
+            if os.path.exists(json_path) and not found_json:
+                props.markers_json = json_path
+                found_json = True
+            
+            # Также ищем прямо в папке
+            direct_json = os.path.join(base_path, "blender_aruco_markers.json")
+            if os.path.exists(direct_json) and not found_json:
+                props.markers_json = direct_json
+                found_json = True
+        
+        # Сообщение о результатах
+        if found_data and found_json:
+            self.report({'INFO'}, "Найдены папка data и файл маркеров")
+        elif found_data:
+            self.report({'WARNING'}, "Найдена папка data, но не найден JSON с маркерами")
+        elif found_json:
+            self.report({'WARNING'}, "Найден JSON с маркерами, но не найдена папка data")
         else:
-            self.report({'WARNING'}, "Файл blender_aruco_markers.json не найден")
+            self.report({'ERROR'}, "Файлы не найдены. Укажите пути вручную")
         
         return {'FINISHED'}
 
+# =============================================================================
+# ИНТЕРФЕЙС
+# =============================================================================
 
-class ARUCO_OT_create_preview_mesh(Operator):
-    """Создание preview mesh для маркеров"""
+class ARUCO_PT_simple_main_panel(Panel):
+    """Главная панель простого аддона"""
     
-    bl_idname = "aruco.create_preview_mesh"
-    bl_label = "Create Preview Meshes"
-    bl_description = "Создать preview mesh объекты для выбранных маркеров"
-    
-    def execute(self, context):
-        selected_markers = [obj for obj in context.selected_objects 
-                          if obj.name.startswith('ArUco_Marker_')]
-        
-        if not selected_markers:
-            self.report({'WARNING'}, "Выберите маркеры ArUco")
-            return {'CANCELLED'}
-        
-        for marker in selected_markers:
-            self.create_marker_mesh(marker)
-        
-        self.report({'INFO'}, f"Создано {len(selected_markers)} preview mesh")
-        return {'FINISHED'}
-    
-    def create_marker_mesh(self, marker_obj):
-        """Создание mesh представления маркера"""
-        
-        # Создание mesh
-        mesh = bpy.data.meshes.new(f"ArUco_Mesh_{marker_obj['aruco_id']}")
-        mesh_obj = bpy.data.objects.new(f"ArUco_Mesh_{marker_obj['aruco_id']}", mesh)
-        
-        # Создание геометрии квадрата
-        bm = bmesh.new()
-        bmesh.ops.create_cube(bm, size=0.1)
-        bm.to_mesh(mesh)
-        bm.free()
-        
-        # Позиционирование
-        mesh_obj.location = marker_obj.location
-        mesh_obj.rotation_euler = marker_obj.rotation_euler
-        
-        # Добавление в ту же коллекцию
-        for collection in marker_obj.users_collection:
-            collection.objects.link(mesh_obj)
-
-
-class ARUCO_PT_main_panel(Panel):
-    """Главная панель ArUco импорта"""
-    
-    bl_label = "ArUco Scene Import"
-    bl_idname = "ARUCO_PT_main_panel"
+    bl_label = "ArUco Simple Import"
+    bl_idname = "ARUCO_PT_simple_main_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "ArUco"
+    bl_category = "ArUco Simple"
     
     def draw(self, context):
         layout = self.layout
-        props = context.scene.aruco_importer
+        props = context.scene.aruco_simple_props
         
         # Заголовок
-        layout.label(text="Cameras + Markers Import", icon='OUTLINER_OB_CAMERA')
+        layout.label(text="Простой импорт ArUco", icon='IMPORT')
         
-        # Выбор файла
+        # Автопоиск
+        layout.operator("aruco.auto_find_files", icon='VIEWZOOM')
+        layout.separator()
+        
+        # Пути к данным
         box = layout.box()
-        box.label(text="Файл данных:")
+        box.label(text="Данные:")
+        
+        # XMP папка
         row = box.row(align=True)
-        row.prop(props, "filepath", text="")
-        row.operator("aruco.auto_find_file", text="", icon='VIEWZOOM')
+        row.prop(props, "xmp_folder", text="")
+        if props.xmp_folder and os.path.exists(props.xmp_folder):
+            # Подсчет XMP файлов
+            xmp_count = len([f for f in os.listdir(props.xmp_folder) 
+                           if f.lower().endswith('.xmp')])
+            box.label(text=f"✅ Найдено XMP файлов: {xmp_count}")
+        else:
+            box.label(text="❌ Папка XMP не найдена", icon='ERROR')
+        
+        # JSON файл
+        row = box.row(align=True)
+        row.prop(props, "markers_json", text="")
+        row.operator("aruco.select_markers_file", text="", icon='FILEBROWSER')
+        
+        if props.markers_json and os.path.exists(props.markers_json):
+            # Подсчет маркеров в JSON
+            try:
+                with open(props.markers_json, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    markers_count = len(data.get('markers', {}))
+                box.label(text=f"✅ Найдено маркеров: {markers_count}")
+            except:
+                box.label(text="❌ Ошибка чтения JSON", icon='ERROR')
+        else:
+            box.label(text="❌ JSON файл не найден", icon='ERROR')
         
         # Что импортировать
         box = layout.box()
         box.label(text="Импортировать:")
-        row = box.row()
-        row.prop(props, "import_cameras")
-        row.prop(props, "import_markers")
+        box.prop(props, "import_cameras")
+        box.prop(props, "import_markers")
         
         # Кнопка импорта
         layout.separator()
         row = layout.row()
-        row.scale_y = 1.5
-        if props.filepath and os.path.exists(props.filepath):
-            row.operator("aruco.import_scene", text="Import Scene", icon='IMPORT')
+        row.scale_y = 2.0
+        
+        can_import = ((props.import_cameras and props.xmp_folder and os.path.exists(props.xmp_folder)) or 
+                     (props.import_markers and props.markers_json and os.path.exists(props.markers_json)))
+        
+        if can_import:
+            row.operator("aruco.simple_import", icon='IMPORT')
         else:
-            op = row.operator("aruco.import_scene", text="Choose File & Import", icon='FILEBROWSER')
-        
-        # Информация о файле
-        if props.filepath:
-            if os.path.exists(props.filepath):
-                layout.label(text=f"✓ {os.path.basename(props.filepath)}", icon='CHECKMARK')
-                
-                # Показываем информацию из файла если можем
-                try:
-                    with open(props.filepath, 'r') as f:
-                        data = json.load(f)
-                    metadata = data.get('metadata', {})
-                    
-                    info_box = layout.box()
-                    if 'total_cameras' in metadata:
-                        info_box.label(text=f"📷 Камер: {metadata['total_cameras']}")
-                    if 'total_markers' in metadata:
-                        info_box.label(text=f"🎯 Маркеров: {metadata['total_markers']}")
-                    if 'high_confidence_markers' in metadata:
-                        info_box.label(text=f"🟢 Высокого качества: {metadata['high_confidence_markers']}")
-                        
-                except:
-                    pass
-            else:
-                layout.label(text="✗ Файл не найден", icon='ERROR')
+            row.enabled = False
+            row.operator("aruco.simple_import", text="Укажите файлы", icon='ERROR')
 
-
-class ARUCO_PT_cameras_panel(Panel):
-    """Панель настроек камер"""
+class ARUCO_PT_simple_settings_panel(Panel):
+    """Панель настроек"""
     
-    bl_label = "Настройки камер"
-    bl_idname = "ARUCO_PT_cameras_panel"
+    bl_label = "Настройки отображения"
+    bl_idname = "ARUCO_PT_simple_settings_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "ArUco"
-    bl_parent_id = "ARUCO_PT_main_panel"
+    bl_category = "ArUco Simple"
+    bl_parent_id = "ARUCO_PT_simple_main_panel"
     bl_options = {'DEFAULT_CLOSED'}
     
     def draw(self, context):
         layout = self.layout
-        props = context.scene.aruco_importer
+        props = context.scene.aruco_simple_props
         
-        layout.enabled = props.import_cameras
-        
-        # Настройки отображения камер
+        # Настройки маркеров
         box = layout.box()
-        box.label(text="Отображение:")
-        box.prop(props, "camera_size")
-        box.prop(props, "show_frustum")
-        if props.show_frustum:
-            box.prop(props, "frustum_scale")
-        box.prop(props, "camera_color_by_quality")
-        
-        # Коллекция
-        box = layout.box()
-        box.label(text="Организация:")
-        box.prop(props, "cameras_collection_name")
-
-
-class ARUCO_PT_markers_panel(Panel):
-    """Панель настроек маркеров"""
-    
-    bl_label = "Настройки маркеров"
-    bl_idname = "ARUCO_PT_markers_panel"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = "ArUco"
-    bl_parent_id = "ARUCO_PT_main_panel"
-    bl_options = {'DEFAULT_CLOSED'}
-    
-    def draw(self, context):
-        layout = self.layout
-        props = context.scene.aruco_importer
-        
-        layout.enabled = props.import_markers
-        
-        # Настройки отображения маркеров
-        box = layout.box()
-        box.label(text="Отображение:")
-        box.prop(props, "empty_type")
+        box.label(text="Маркеры:")
         box.prop(props, "marker_size")
         box.prop(props, "size_by_quality")
         box.prop(props, "color_by_quality")
         
-        # Фильтры качества
+        # Очистка
         box = layout.box()
-        box.label(text="Фильтры качества:")
-        box.prop(props, "import_low_quality")
-        box.prop(props, "min_confidence")
-        
-        # Коллекция
-        box = layout.box()
-        box.label(text="Организация:")
-        box.prop(props, "markers_collection_name")
-
-
-class ARUCO_PT_general_panel(Panel):
-    """Панель общих настроек"""
-    
-    bl_label = "Общие настройки"
-    bl_idname = "ARUCO_PT_general_panel"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = "ArUco"
-    bl_parent_id = "ARUCO_PT_main_panel"
-    bl_options = {'DEFAULT_CLOSED'}
-    
-    def draw(self, context):
-        layout = self.layout
-        props = context.scene.aruco_importer
-        
-        # Общие настройки
-        box = layout.box()
-        box.label(text="Импорт:")
+        box.label(text="Очистка:")
         box.prop(props, "clear_existing")
 
-
-class ARUCO_PT_tools_panel(Panel):
-    """Панель инструментов"""
+class ARUCO_PT_simple_info_panel(Panel):
+    """Информационная панель"""
     
-    bl_label = "Инструменты"
-    bl_idname = "ARUCO_PT_tools_panel"
+    bl_label = "Информация"
+    bl_idname = "ARUCO_PT_simple_info_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "ArUco"
-    bl_parent_id = "ARUCO_PT_main_panel"
+    bl_category = "ArUco Simple"
+    bl_parent_id = "ARUCO_PT_simple_main_panel"
     bl_options = {'DEFAULT_CLOSED'}
     
     def draw(self, context):
         layout = self.layout
         
-        # Инструменты для работы с маркерами
-        layout.operator("aruco.create_preview_mesh", icon='MESH_CUBE')
+        # Статистика сцены
+        cameras_count = sum(1 for obj in bpy.data.objects if obj.type == 'CAMERA')
+        markers_count = sum(1 for obj in bpy.data.objects if obj.name.startswith('ArUco_Marker_'))
         
-        # Информация о выбранных объектах
-        selected_cameras = [obj for obj in context.selected_objects 
-                          if obj.type == 'CAMERA']
-        selected_markers = [obj for obj in context.selected_objects 
-                          if obj.name.startswith('ArUco_Marker_')]
-        
-        if selected_cameras or selected_markers:
+        if cameras_count > 0 or markers_count > 0:
             box = layout.box()
-            box.label(text="Выбранные объекты:")
+            box.label(text="В сцене:")
+            box.label(text=f"🎥 Камер: {cameras_count}")
+            box.label(text=f"🏷️ Маркеров: {markers_count}")
             
-            if selected_cameras:
-                box.label(text=f"📷 Камер: {len(selected_cameras)}")
-                for cam in selected_cameras[:3]:  # Показываем первые 3
-                    box.label(text=f"   {cam.name}")
-                if len(selected_cameras) > 3:
-                    box.label(text=f"   ... и еще {len(selected_cameras) - 3}")
-            
-            if selected_markers:
-                box.label(text=f"🎯 Маркеров: {len(selected_markers)}")
-                for marker in selected_markers[:3]:  # Показываем первые 3
-                    quality = marker.get('quality', '?')
-                    box.label(text=f"   ID {marker.get('aruco_id', '?')} ({quality})")
-                if len(selected_markers) > 3:
-                    box.label(text=f"   ... и еще {len(selected_markers) - 3}")
+            # Качество маркеров
+            if markers_count > 0:
+                high_quality = sum(1 for obj in bpy.data.objects 
+                                 if obj.name.startswith('ArUco_Marker_') 
+                                 and obj.get('quality') == 'high')
+                medium_quality = sum(1 for obj in bpy.data.objects 
+                                   if obj.name.startswith('ArUco_Marker_') 
+                                   and obj.get('quality') == 'medium')
+                low_quality = markers_count - high_quality - medium_quality
+                
+                box.label(text=f"🟢 Высокого качества: {high_quality}")
+                box.label(text=f"🟡 Среднего качества: {medium_quality}")
+                box.label(text=f"🟠 Низкого качества: {low_quality}")
+        
+        # Инструкции
+        box = layout.box()
+        box.label(text="💡 Инструкция:")
+        box.label(text="1. Запустите main.py для создания JSON")
+        box.label(text="2. Нажмите 'Автопоиск' или укажите пути")
+        box.label(text="3. Выберите что импортировать")
+        box.label(text="4. Нажмите 'Импортировать'")
+        
+        box.label(text="🎨 Цвета маркеров:")
+        box.label(text="🟢 Зеленый = высокое качество")
+        box.label(text="🟡 Желтый = среднее качество")
+        box.label(text="🟠 Оранжевый = низкое качество")
 
+# =============================================================================
+# РЕГИСТРАЦИЯ
+# =============================================================================
 
-# Регистрация классов
 classes = [
-    ArUcoImporterProperties,
-    ARUCO_OT_import_scene,
-    ARUCO_OT_auto_find_file,
-    ARUCO_OT_create_preview_mesh,
-    ARUCO_PT_main_panel,
-    ARUCO_PT_cameras_panel,
-    ARUCO_PT_markers_panel,
-    ARUCO_PT_general_panel,
-    ARUCO_PT_tools_panel,
+    ArUcoSimpleProperties,
+    ARUCO_OT_simple_import,
+    ARUCO_OT_select_markers_file,
+    ARUCO_OT_auto_find_files,
+    ARUCO_PT_simple_main_panel,
+    ARUCO_PT_simple_settings_panel,
+    ARUCO_PT_simple_info_panel,
 ]
 
-
 def register():
-    """Регистрация addon"""
+    """Регистрация аддона"""
     for cls in classes:
         bpy.utils.register_class(cls)
     
-    # Регистрация свойств
-    bpy.types.Scene.aruco_importer = bpy.props.PointerProperty(
-        type=ArUcoImporterProperties
+    bpy.types.Scene.aruco_simple_props = bpy.props.PointerProperty(
+        type=ArUcoSimpleProperties
     )
     
-    print("ArUco Cameras + Markers Importer addon зарегистрирован")
-
+    print("ArUco Simple Addon зарегистрирован")
 
 def unregister():
-    """Отмена регистрации addon"""
+    """Отмена регистрации аддона"""
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     
-    # Удаление свойств
-    del bpy.types.Scene.aruco_importer
+    del bpy.types.Scene.aruco_simple_props
     
-    print("ArUco Cameras + Markers Importer addon удален")
-
+    print("ArUco Simple Addon удален")
 
 if __name__ == "__main__":
     register()
