@@ -184,7 +184,7 @@ def create_marker(marker_id, marker_data, collection, settings):
 
 def import_cameras(folder):
     """Импорт камер из XMP файлов"""
-    print("🎥 Импорт камер из XMP файлов...")
+    print("Импорт камер из XMP файлов...")
     
     if not folder or not os.path.isdir(folder):
         print(f"[ERROR] Неверная папка: {folder}")
@@ -214,7 +214,7 @@ def import_cameras(folder):
 
 def import_markers(markers_file):
     """Импорт ArUco маркеров из JSON файла"""
-    print("🏷️  Импорт ArUco маркеров...")
+    print("Импорт ArUco маркеров...")
     
     if not markers_file or not os.path.exists(markers_file):
         print(f"[ERROR] Файл с маркерами не найден: {markers_file}")
@@ -276,7 +276,7 @@ def setup_scene():
 
 def clear_existing_data():
     """Очистка существующих камер и маркеров"""
-    print("🧹 Очистка существующих данных...")
+    print("Очистка существующих данных...")
     
     # Удаляем объекты камер
     cameras_to_delete = [obj for obj in bpy.data.objects if obj.type == 'CAMERA']
@@ -300,10 +300,10 @@ def clear_existing_data():
 def main():
     """Главная функция импорта"""
     print("="*60)
-    print("🚀 ЕДИНЫЙ ИМПОРТЕР КАМЕР И ARUCO МАРКЕРОВ")
+    print("ЕДИНЫЙ ИМПОРТЕР КАМЕР И ARUCO МАРКЕРОВ")
     print("="*60)
-    print(f"📂 Папка XMP: {FOLDER}")
-    print(f"🏷️  Файл маркеров: {MARKERS_FILE}")
+    print(f"Папка XMP: {FOLDER}")
+    print(f"Файл маркеров: {MARKERS_FILE}")
     print("="*60)
     
     try:
@@ -320,24 +320,24 @@ def main():
         imported_markers = import_markers(MARKERS_FILE)
         
         # Итоговая статистика
-        print("\n✅ ИМПОРТ ЗАВЕРШЕН УСПЕШНО!")
-        print(f"   🎥 Импортировано камер: {len(imported_cameras)}")
-        print(f"   🏷️  Импортировано маркеров: {len(imported_markers)}")
+        print("\nИМПОРТ ЗАВЕРШЕН УСПЕШНО!")
+        print(f"   Импортировано камер: {len(imported_cameras)}")
+        print(f"   Импортировано маркеров: {len(imported_markers)}")
         
         if imported_cameras or imported_markers:
-            print("\n📋 КОЛЛЕКЦИИ BLENDER:")
+            print("\нКОЛЛЕКЦИИ BLENDER:")
             if imported_cameras:
                 print("   • RealityCapture_Cameras - камеры из XMP")
             if imported_markers:
                 print("   • ArUco_Markers - триангулированные маркеры")
-                print("     🟢 Зеленые - высокое качество")
-                print("     🟡 Желтые - среднее качество")
-                print("     🟠 Оранжевые - низкое качество")
+                print("     Зеленые - высокое качество")
+                print("     Желтые - среднее качество")
+                print("     Оранжевые - низкое качество")
         else:
-            print("\n⚠️  Данные не найдены для импорта")
+            print("\nДанные не найдены для импорта")
             
     except Exception as e:
-        print(f"\n💥 КРИТИЧЕСКАЯ ОШИБКА: {e}")
+        print(f"\nКРИТИЧЕСКАЯ ОШИБКА: {e}")
         print(traceback.format_exc())
 
 if __name__ == "__main__":

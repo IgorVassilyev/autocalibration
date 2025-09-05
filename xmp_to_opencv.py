@@ -158,10 +158,10 @@ class XMPToOpenCVConverter:
                 # Выводим предупреждения если есть
                 warnings = opencv_params['conversion_warnings']
                 if warnings:
-                    print(f"   ⚠️  {camera_id}: {'; '.join(warnings)}")
+                    print(f"   Предупреждения {camera_id}: {'; '.join(warnings)}")
                 
             except Exception as e:
-                print(f"   ❌ Ошибка преобразования {camera_id}: {e}")
+                print(f"   Ошибка преобразования {camera_id}: {e}")
                 continue
         
         return opencv_cameras
@@ -237,17 +237,17 @@ def print_conversion_example(camera_id: str, xmp_data: Dict, opencv_data: Dict):
     
     Полезно для отладки и понимания процесса
     """
-    print(f"\n📷 ПРИМЕР ПРЕОБРАЗОВАНИЯ: {camera_id}")
+    print(f"\nПРИМЕР ПРЕОБРАЗОВАНИЯ: {camera_id}")
     print("-" * 40)
     
     # XMP данные
-    print("🏭 RealityCapture XMP:")
+    print("RealityCapture XMP:")
     print(f"   Фокусное расстояние: {xmp_data['focal_length']:.3f} mm (35mm эквивалент)")
     print(f"   Главная точка U: {xmp_data['principal_point_u']:.6f} (нормализованная)")
     print(f"   Главная точка V: {xmp_data['principal_point_v']:.6f} (нормализованная)")
     
     # OpenCV данные
-    print("\n🔧 OpenCV результат:")
+    print("\nOpenCV результат:")
     print(f"   Размер изображения: {opencv_data['image_size'][0]}x{opencv_data['image_size'][1]} пикселей")
     print(f"   Фокусное расстояние fx: {opencv_data['fx']:.2f} пикселей")
     print(f"   Фокусное расстояние fy: {opencv_data['fy']:.2f} пикселей")
@@ -264,17 +264,17 @@ def print_conversion_example(camera_id: str, xmp_data: Dict, opencv_data: Dict):
     # Предупреждения
     warnings = opencv_data['conversion_warnings']
     if warnings:
-        print(f"\n   ⚠️  Предупреждения:")
+        print(f"\n   Предупреждения:")
         for warning in warnings:
             print(f"      • {warning}")
     else:
-        print(f"\n   ✅ Все проверки пройдены")
+        print(f"\n   Все проверки пройдены")
 
 # Функция для тестирования модуля
 def test_conversion():
     """Тест модуля преобразования"""
     
-    print("🧪 ТЕСТ МОДУЛЯ XMP → OpenCV")
+    print("ТЕСТ МОДУЛЯ XMP → OpenCV")
     print("=" * 35)
     
     # Создаем тестовые XMP данные
@@ -301,7 +301,7 @@ def test_conversion():
     # Показываем результат
     print_conversion_example("test_camera", test_xmp_data, opencv_data)
     
-    print(f"\n✅ Тест завершен успешно!")
+    print(f"\nТест завершен успешно!")
 
 if __name__ == "__main__":
     test_conversion()

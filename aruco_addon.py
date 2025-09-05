@@ -488,9 +488,9 @@ class ARUCO_PT_simple_main_panel(Panel):
             # Подсчет XMP файлов
             xmp_count = len([f for f in os.listdir(props.xmp_folder) 
                            if f.lower().endswith('.xmp')])
-            box.label(text=f"✅ Найдено XMP файлов: {xmp_count}")
+            box.label(text=f"Найдено XMP файлов: {xmp_count}")
         else:
-            box.label(text="❌ Папка XMP не найдена", icon='ERROR')
+            box.label(text="Папка XMP не найдена", icon='ERROR')
         
         # JSON файл
         row = box.row(align=True)
@@ -503,11 +503,11 @@ class ARUCO_PT_simple_main_panel(Panel):
                 with open(props.markers_json, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     markers_count = len(data.get('markers', {}))
-                box.label(text=f"✅ Найдено маркеров: {markers_count}")
+                box.label(text=f"Найдено маркеров: {markers_count}")
             except:
-                box.label(text="❌ Ошибка чтения JSON", icon='ERROR')
+                box.label(text="Ошибка чтения JSON", icon='ERROR')
         else:
-            box.label(text="❌ JSON файл не найден", icon='ERROR')
+            box.label(text="JSON файл не найден", icon='ERROR')
         
         # Что импортировать
         box = layout.box()
@@ -577,8 +577,8 @@ class ARUCO_PT_simple_info_panel(Panel):
         if cameras_count > 0 or markers_count > 0:
             box = layout.box()
             box.label(text="В сцене:")
-            box.label(text=f"🎥 Камер: {cameras_count}")
-            box.label(text=f"🏷️ Маркеров: {markers_count}")
+            box.label(text=f"Камер: {cameras_count}")
+            box.label(text=f"Маркеров: {markers_count}")
             
             # Качество маркеров
             if markers_count > 0:
@@ -590,22 +590,22 @@ class ARUCO_PT_simple_info_panel(Panel):
                                    and obj.get('quality') == 'medium')
                 low_quality = markers_count - high_quality - medium_quality
                 
-                box.label(text=f"🟢 Высокого качества: {high_quality}")
-                box.label(text=f"🟡 Среднего качества: {medium_quality}")
-                box.label(text=f"🟠 Низкого качества: {low_quality}")
+                box.label(text=f"Высокого качества: {high_quality}")
+                box.label(text=f"Среднего качества: {medium_quality}")
+                box.label(text=f"Низкого качества: {low_quality}")
         
         # Инструкции
         box = layout.box()
-        box.label(text="💡 Инструкция:")
+        box.label(text="Инструкция:")
         box.label(text="1. Запустите main.py для создания JSON")
         box.label(text="2. Нажмите 'Автопоиск' или укажите пути")
         box.label(text="3. Выберите что импортировать")
         box.label(text="4. Нажмите 'Импортировать'")
         
-        box.label(text="🎨 Цвета маркеров:")
-        box.label(text="🟢 Зеленый = высокое качество")
-        box.label(text="🟡 Желтый = среднее качество")
-        box.label(text="🟠 Оранжевый = низкое качество")
+        box.label(text="Цвета маркеров:")
+        box.label(text="Зеленый = высокое качество")
+        box.label(text="Желтый = среднее качество")
+        box.label(text="Оранжевый = низкое качество")
 
 # =============================================================================
 # РЕГИСТРАЦИЯ

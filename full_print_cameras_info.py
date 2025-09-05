@@ -24,7 +24,7 @@ def print_camera_summary(cam_id: str, cam_data: dict) -> None:
         print(f"  Location: {cam_data['latitude']}, {cam_data['longitude']}")
     
     # Валидация
-    status = "✓" if validation['is_valid'] else "✗"
+    status = "+" if validation['is_valid'] else "-"
     print(f"  Validation: {status}")
     
     if validation['warnings']:
@@ -41,11 +41,11 @@ def print_camera_detailed(cam_id: str, cam_data: dict) -> None:
     print(f"{'='*60}")
     
     # === БАЗОВАЯ ИНФОРМАЦИЯ ===
-    print(f"📄 File: {cam_data['filename']}")
-    print(f"📍 File path: {cam_data['file_path']}")
+    print(f"File: {cam_data['filename']}")
+    print(f"File path: {cam_data['file_path']}")
     
     # === ВНУТРЕННИЕ ПАРАМЕТРЫ КАМЕРЫ ===
-    print(f"\n🔧 INTERNAL CAMERA PARAMETERS:")
+    print(f"\nINTERNAL CAMERA PARAMETERS:")
     print(f"   Focal length (35mm equiv): {cam_data['focal_length']:.4f}mm")
     print(f"   Principal point U: {cam_data['principal_point_u']:.6f}")
     print(f"   Principal point V: {cam_data['principal_point_v']:.6f}")
@@ -53,7 +53,7 @@ def print_camera_detailed(cam_id: str, cam_data: dict) -> None:
     print(f"   Skew: {cam_data['skew']:.6f}")
     
     # === ВНЕШНИЕ ПАРАМЕТРЫ ===
-    print(f"\n📍 EXTERNAL PARAMETERS:")
+    print(f"\nEXTERNAL PARAMETERS:")
     pos = cam_data['position']
     print(f"   Position (X, Y, Z): [{pos[0]:.6f}, {pos[1]:.6f}, {pos[2]:.6f}]")
     
@@ -63,7 +63,7 @@ def print_camera_detailed(cam_id: str, cam_data: dict) -> None:
         print(f"     Row {i+1}: [{row[0]:9.6f}, {row[1]:9.6f}, {row[2]:9.6f}]")
     
     # === ДИСТОРСИЯ ===
-    print(f"\n🔍 DISTORTION:")
+    print(f"\nDISTORTION:")
     print(f"   Model: {cam_data['distortion_model']}")
     dist = cam_data['distortion']
     print(f"   Coefficients:")
@@ -75,7 +75,7 @@ def print_camera_detailed(cam_id: str, cam_data: dict) -> None:
     print(f"     k4 (radial): {dist[5]:10.6f}")
     
     # === МЕТАДАННЫЕ КАЛИБРОВКИ ===
-    print(f"\n⚙️  CALIBRATION METADATA:")
+    print(f"\nCALIBRATION METADATA:")
     print(f"   XCR version: {cam_data['xcr_version']}")
     rc_version = cam_data['realitycapture_version']
     print(f"   RealityCapture version: {rc_version if rc_version != 'unknown' else 'not available'}")
@@ -86,13 +86,13 @@ def print_camera_detailed(cam_id: str, cam_data: dict) -> None:
     print(f"   Distortion group: {cam_data['distortion_group']}")
     
     # === ФЛАГИ ИСПОЛЬЗОВАНИЯ ===
-    print(f"\n🚩 PROCESSING FLAGS:")
+    print(f"\nPROCESSING FLAGS:")
     print(f"   Used in texturing: {'Yes' if cam_data['in_texturing'] else 'No'}")
     print(f"   Used in meshing: {'Yes' if cam_data['in_meshing'] else 'No'}")
     
     # === ГЕОЛОКАЦИЯ ===
     if cam_data['latitude'] or cam_data['longitude'] or cam_data['altitude'] is not None:
-        print(f"\n🌍 GEOLOCATION:")
+        print(f"\nGEOLOCATION:")
         if cam_data['latitude']:
             print(f"   Latitude: {cam_data['latitude']}")
         if cam_data['longitude']:
@@ -102,9 +102,9 @@ def print_camera_detailed(cam_id: str, cam_data: dict) -> None:
     
     # === ВАЛИДАЦИЯ ===
     validation = cam_data['validation']
-    print(f"\n✅ VALIDATION:")
+    print(f"\nVALIDATION:")
     status = "VALID" if validation['is_valid'] else "INVALID"
-    status_icon = "✓" if validation['is_valid'] else "✗"
+    status_icon = "+" if validation['is_valid'] else "-"
     print(f"   Status: {status_icon} {status}")
     
     if validation['warnings']:
@@ -137,7 +137,7 @@ def print_camera_comparison_table(cameras: dict) -> None:
         cam = cameras[cam_id]
         pos = cam['position']
         alt = f"{cam['altitude']:.1f}" if cam['altitude'] is not None else "N/A"
-        valid = "✓" if cam['validation']['is_valid'] else "✗"
+        valid = "+" if cam['validation']['is_valid'] else "-"
         
         row = f"{cam_id:<15} {cam['focal_length']:<10.2f} {pos[0]:<10.3f} {pos[1]:<10.3f} {pos[2]:<10.3f} {alt:<12} {valid:<5}"
         print(row)
@@ -147,18 +147,18 @@ def print_detailed_stats(parser: SimpleXMPParser) -> None:
     """Печать детальной статистики."""
     stats = parser.get_summary_stats()
     
-    print(f"\n📈 Total cameras loaded: {stats['total_cameras']}")
-    print(f"❌ Validation errors: {stats['validation_errors']}")
+    print(f"\nTotal cameras loaded: {stats['total_cameras']}")
+    print(f"Validation errors: {stats['validation_errors']}")
     
-    print(f"\n🔍 FOCAL LENGTHS:")
+    print(f"\nFOCAL LENGTHS:")
     print(f"   Range: {stats['focal_length_range'][0]:.2f} - {stats['focal_length_range'][1]:.2f}mm")
     print(f"   Mean: {stats['focal_length_mean']:.2f}mm")
     
     if stats['altitude_range'][0] is not None:
-        print(f"\n🏔️  ALTITUDES:")
+        print(f"\nALTITUDES:")
         print(f"   Range: {stats['altitude_range'][0]:.1f} - {stats['altitude_range'][1]:.1f}m")
     
-    print(f"\n🔧 TECHNICAL INFO:")
+    print(f"\nTECHNICAL INFO:")
     print(f"   Distortion models: {', '.join(stats['distortion_models'])}")
     print(f"   Coordinate systems: {', '.join(stats['coordinate_systems'])}")
     if stats['realitycapture_versions'] != ['version not available']:
@@ -214,13 +214,13 @@ def export_full_data(cameras: dict, output_path: str) -> None:
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(export_data, f, indent=2, ensure_ascii=False)
     
-    print(f"\n✓ Full camera data exported to {output_path}")
+    print(f"\nFull camera data exported to {output_path}")
 
 
 def main():
     """Основная функция демонстрации."""
     print("=" * 60)
-    print("🔧 ENHANCED XMP PARSER DEMO")
+    print("ENHANCED XMP PARSER DEMO")
     print("=" * 60)
     
     # Инициализация с логированием
@@ -230,17 +230,17 @@ def main():
     cameras = parser.load_all_cameras("data")
     
     if not cameras:
-        print("❌ No cameras loaded!")
+        print("No cameras loaded!")
         return
     
-    print(f"\n✅ Successfully loaded {len(cameras)} cameras")
+    print(f"\nSuccessfully loaded {len(cameras)} cameras")
     
     # === КРАТКАЯ СРАВНИТЕЛЬНАЯ ТАБЛИЦА ===
     print_camera_comparison_table(cameras)
     
     # === ПОДРОБНАЯ ИНФОРМАЦИЯ ПО КАЖДОЙ КАМЕРЕ ===
     print(f"\n\n{'#'*80}")
-    print("📋 DETAILED CAMERA INFORMATION")
+    print("DETAILED CAMERA INFORMATION")
     print(f"{'#'*80}")
     
     for cam_id in sorted(cameras.keys()):
@@ -249,7 +249,7 @@ def main():
     
     # === ОБЩАЯ СТАТИСТИКА ===
     print(f"\n\n{'='*60}")
-    print("📊 SUMMARY STATISTICS")
+    print("SUMMARY STATISTICS")
     print(f"{'='*60}")
     print_detailed_stats(parser)
     

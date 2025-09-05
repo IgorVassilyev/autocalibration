@@ -112,9 +112,9 @@ class SimpleArUcoDetector:
         }
         
         if self.enable_logging:
-            print(f"🔧 ArUco детектор инициализирован")
+            print(f"ArUco детектор инициализирован")
             print(f"   Целевой словарь: DICT_4X4_1000")
-            print(f"   ⚠️  ТОЛЬКО маркеры с ID 1-{MAX_VALID_MARKER_ID}")
+            print(f"   ТОЛЬКО маркеры с ID 1-{MAX_VALID_MARKER_ID}")
             if self.filter_6x6:
                 print(f"   Фильтрация 6x6: ВКЛЮЧЕНА (DICT_6X6_250)")
             print(f"   Строгие параметры детекции: ВКЛЮЧЕНЫ")
@@ -362,7 +362,7 @@ class SimpleArUcoDetector:
             Результаты {camera_id: {marker_id: MarkerDetection}}
         """
         if self.enable_logging:
-            print(f"🔍 Поиск изображений в {directory}")
+            print(f"Поиск изображений в {directory}")
         
         # Поиск изображений
         image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp"]
@@ -379,7 +379,7 @@ class SimpleArUcoDetector:
         
         if not images:
             if self.enable_logging:
-                print(f"❌ Изображения не найдены в {directory}")
+                print(f"Изображения не найдены в {directory}")
             return {}
         
         if self.enable_logging:
@@ -409,7 +409,7 @@ class SimpleArUcoDetector:
         """Печать сводки результатов детекции"""
         
         print(f"\n{'='*60}")
-        print("📊 СВОДКА ДЕТЕКЦИИ МАРКЕРОВ")
+        print("СВОДКА ДЕТЕКЦИИ МАРКЕРОВ")
         print(f"{'='*60}")
         
         # Общая статистика
@@ -418,27 +418,27 @@ class SimpleArUcoDetector:
         total_detections = sum(len(detections) for detections in all_detections.values())
         unique_markers = len(self.detection_stats['unique_marker_ids'])
         
-        print(f"🎥 Обработано камер: {total_cameras}")
-        print(f"✅ Камер с маркерами 4x4: {cameras_with_markers}")
-        print(f"🏷️  Всего детекций 4x4: {total_detections}")
-        print(f"🔢 Уникальных маркеров 4x4: {unique_markers}")
-        print(f"⚠️  Допустимый диапазон ID: 1-{MAX_VALID_MARKER_ID}")
+        print(f"Обработано камер: {total_cameras}")
+        print(f"Камер с маркерами 4x4: {cameras_with_markers}")
+        print(f"Всего детекций 4x4: {total_detections}")
+        print(f"Уникальных маркеров 4x4: {unique_markers}")
+        print(f"Допустимый диапазон ID: 1-{MAX_VALID_MARKER_ID}")
         
         # Статистика фильтрации
         if self.filter_6x6 and self.detection_stats['filtered_6x6_count'] > 0:
-            print(f"\n🚫 ФИЛЬТРАЦИЯ 6x6:")
+            print(f"\nФИЛЬТРАЦИЯ 6x6:")
             print(f"   Обнаружено и отфильтровано 6x6 маркеров: {self.detection_stats['filtered_6x6_count']}")
         
         if total_cameras > 0:
             success_rate = (cameras_with_markers / total_cameras) * 100
             avg_markers = total_detections / cameras_with_markers if cameras_with_markers > 0 else 0
-            print(f"\n📈 Успешность детекции 4x4: {success_rate:.1f}%")
-            print(f"📊 Среднее маркеров 4x4 на камеру: {avg_markers:.1f}")
+            print(f"\nУспешность детекции 4x4: {success_rate:.1f}%")
+            print(f"Среднее маркеров 4x4 на камеру: {avg_markers:.1f}")
         
         # Список всех найденных 4x4 маркеров
         if unique_markers > 0:
             sorted_markers = sorted(self.detection_stats['unique_marker_ids'])
-            print(f"\n🆔 ID найденных маркеров: {sorted_markers}")
+            print(f"\nID найденных маркеров: {sorted_markers}")
         
         # Частота обнаружения каждого маркера
         marker_frequency = {}
@@ -447,31 +447,31 @@ class SimpleArUcoDetector:
                 marker_frequency[marker_id] = marker_frequency.get(marker_id, 0) + 1
         
         if marker_frequency:
-            print(f"\n📊 ЧАСТОТА ОБНАРУЖЕНИЯ 4x4:")
+            print(f"\nЧАСТОТА ОБНАРУЖЕНИЯ 4x4:")
             for marker_id in sorted(marker_frequency.keys()):
                 frequency = marker_frequency[marker_id]
                 percentage = (frequency / total_cameras) * 100
-                triangulatable = "✅" if frequency >= 3 else "⚠️" if frequency >= 2 else "❌"
+                triangulatable = "OK" if frequency >= 3 else "WARN" if frequency >= 2 else "NO"
                 print(f"   Маркер {marker_id:2d}: {frequency:2d}/{total_cameras} камер ({percentage:5.1f}%) {triangulatable}")
         
         # Камеры без маркеров
         failed_cameras = [cam_id for cam_id, detections in all_detections.items() if not detections]
         if failed_cameras:
-            print(f"\n⚠️  Камеры без маркеров 4x4: {failed_cameras}")
+            print(f"\nКамеры без маркеров 4x4: {failed_cameras}")
         
         # Оценка готовности для триангуляции
         triangulatable_markers = sum(1 for freq in marker_frequency.values() if freq >= 3)
-        print(f"\n🎯 ГОТОВНОСТЬ ДЛЯ 3D ТРИАНГУЛЯЦИИ:")
+        print(f"\nГОТОВНОСТЬ ДЛЯ 3D ТРИАНГУЛЯЦИИ:")
         print(f"   Маркеров видимых на ≥3 камерах: {triangulatable_markers}")
         
         if triangulatable_markers >= 8:
-            print("   ✅ Отлично! Достаточно для надежной триангуляции")
+            print("   Отлично! Достаточно для надежной триангуляции")
         elif triangulatable_markers >= 5:
-            print("   ⚠️  Хорошо. Достаточно для базовой триангуляции")
+            print("   Хорошо. Достаточно для базовой триангуляции")
         elif triangulatable_markers >= 3:
-            print("   ⚠️  Минимально. Результат может быть неточным")
+            print("   Минимально. Результат может быть неточным")
         else:
-            print("   ❌ Недостаточно для триангуляции")
+            print("   Недостаточно для триангуляции")
     
     def save_results_to_json(self, detections: Dict[str, Dict[int, MarkerDetection]], 
                            output_path: str) -> None:
@@ -515,7 +515,7 @@ class SimpleArUcoDetector:
             json.dump(json_data, f, indent=2, ensure_ascii=False)
         
         if self.enable_logging:
-            print(f"💾 Результаты сохранены в {output_path}")
+            print(f"Результаты сохранены в {output_path}")
     
     def get_detection_statistics(self) -> Dict:
         """Получение статистики детекции"""
@@ -539,7 +539,7 @@ class SimpleArUcoDetector:
         os.makedirs(output_dir, exist_ok=True)
         
         if self.enable_logging:
-            print(f"🎨 Создание изображений с отмеченными маркерами...")
+            print(f" Создание изображений с отмеченными маркерами...")
         
         # Поиск изображений
         image_extensions = ["*.jpg", "*.jpeg", "*.png", "*.bmp"]
@@ -600,9 +600,9 @@ class SimpleArUcoDetector:
             cv2.imwrite(out_path, img)
         
         if self.enable_logging:
-            print(f"✅ Изображения с маркерами сохранены в {output_dir}")
-            print(f"   🟢 Зеленые рамки - маркеры 4x4 с ID 1-{MAX_VALID_MARKER_ID}")
-            print(f"   🔴 Красные рамки - маркеры 6x6 (отфильтрованные)")
+            print(f" Изображения с маркерами сохранены в {output_dir}")
+            print(f"    Зеленые рамки - маркеры 4x4 с ID 1-{MAX_VALID_MARKER_ID}")
+            print(f"    Красные рамки - маркеры 6x6 (отфильтрованные)")
 
 
 # Удобные функции для совместимости
@@ -654,14 +654,14 @@ def detect_all_markers_in_directory(directory: str = "data",
     dict
         Результаты детекции
     """
-    print("🚀 ДЕТЕКЦИЯ ARUCO МАРКЕРОВ 4x4 (DICT_4X4_1000)")
-    print(f"   ⚠️  СТРОГО ID 1-{MAX_VALID_MARKER_ID}")
+    print("ДЕТЕКЦИЯ ARUCO МАРКЕРОВ 4x4 (DICT_4X4_1000)")
+    print(f"    СТРОГО ID 1-{MAX_VALID_MARKER_ID}")
     print(f"   с автоматической фильтрацией 6x6 маркеров")
     print("=" * 50)
-    print(f"📂 Директория: {directory}")
-    print(f"💾 Результаты будут сохранены в: {output_file}")
+    print(f" Директория: {directory}")
+    print(f" Результаты будут сохранены в: {output_file}")
     if create_images:
-        print(f"🎨 Изображения с маркерами в: {images_output_dir}")
+        print(f" Изображения с маркерами в: {images_output_dir}")
     print("=" * 50)
     
     # Создание детектора с жесткой фильтрацией
@@ -724,11 +724,11 @@ def main():
     
     # Проверка входной директории
     if not os.path.exists(args.input):
-        print(f"❌ Директория не найдена: {args.input}")
+        print(f"Директория не найдена: {args.input}")
         return 1
     
-    print("🚀 ДЕТЕКЦИЯ ARUCO МАРКЕРОВ 4x4")
-    print(f"   ⚠️  ТОЛЬКО ID от 1 до {MAX_VALID_MARKER_ID}")
+    print("ДЕТЕКЦИЯ ARUCO МАРКЕРОВ 4x4")
+    print(f"    ТОЛЬКО ID от 1 до {MAX_VALID_MARKER_ID}")
     print("=" * 50)
     
     # Создание детектора
@@ -748,7 +748,7 @@ def main():
         if args.create_images:
             detector.create_output_images(args.input, args.images_output)
         
-        print(f"\n✅ Детекция завершена успешно!")
+        print(f"\nДетекция завершена успешно!")
         
         # Проверка готовности для триангуляции
         marker_frequency = {}
@@ -758,19 +758,19 @@ def main():
         
         triangulatable_markers = sum(1 for freq in marker_frequency.values() if freq >= 3)
         
-        print(f"\n🎯 Готовность для 3D триангуляции:")
+        print(f"\nГотовность для 3D триангуляции:")
         print(f"   Маркеров видимых на ≥3 камерах: {triangulatable_markers}")
         
         if triangulatable_markers >= 5:
-            print("   ✅ Готово для следующего этапа триангуляции!")
+            print(" Готово для следующего этапа триангуляции!")
         elif triangulatable_markers >= 3:
-            print("   ⚠️  Минимально достаточно для триангуляции")
+            print("  Минимально достаточно для триангуляции")
         else:
-            print("   ❌ Недостаточно для надежной триангуляции")
+            print(" Недостаточно для надежной триангуляции")
             
         return 0
     else:
-        print(f"\n❌ Маркеры не найдены")
+        print(f"\nМаркеры не найдены")
         return 1
 
 

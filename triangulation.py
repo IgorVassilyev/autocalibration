@@ -217,7 +217,7 @@ class ArUcoTriangulator:
         
         for camera_id, detections in marker_detections.items():
             if camera_id not in opencv_cameras:
-                print(f"   ⚠️  Пропускаем камеру {camera_id}: нет параметров")
+                print(f"   Пропускаем камеру {camera_id}: нет параметров")
                 continue
             
             camera_data = opencv_cameras[camera_id]
@@ -235,7 +235,7 @@ class ArUcoTriangulator:
         print(f"   Анализ наблюдений:")
         for marker_id, observations in markers_observations.items():
             n_cams = len(observations)
-            status = "✅" if n_cams >= self.min_cameras else "❌"
+            status = "OK" if n_cams >= self.min_cameras else "NO"
             print(f"     Маркер {marker_id}: {n_cams} камер {status}")
         
         # Триангулируем каждый маркер
@@ -255,7 +255,7 @@ class ArUcoTriangulator:
                     triangulated_markers[marker_id] = result
                     
             except Exception as e:
-                print(f"   ❌ Маркер {marker_id}: ошибка триангуляции: {e}")
+                print(f"   Маркер {marker_id}: ошибка триангуляции: {e}")
                 continue
         
         return triangulated_markers

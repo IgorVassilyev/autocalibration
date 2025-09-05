@@ -29,7 +29,7 @@ try:
     from triangulation import triangulate_markers
     from config import CURRENT_IMAGE_SIZE
 except ImportError as e:
-    print(f"❌ Ошибка импорта модулей: {e}")
+    print(f"Ошибка импорта модулей: {e}")
     print("Убедитесь, что все файлы проекта находятся в одной директории:")
     print("  - xmp_parser.py, xmp_to_opencv.py, aruco_detector.py")
     print("  - triangulation.py, config.py")
@@ -39,13 +39,13 @@ except ImportError as e:
 def validate_input_data(data_dir: str) -> bool:
     """Валидация входных данных"""
     if not os.path.exists(data_dir):
-        print(f"❌ Директория не найдена: {data_dir}")
+        print(f"Директория не найдена: {data_dir}")
         return False
     
     # Поиск XMP файлов
     xmp_files = [f for f in os.listdir(data_dir) if f.endswith('.xmp')]
     if not xmp_files:
-        print(f"❌ XMP файлы не найдены в {data_dir}")
+        print(f"XMP файлы не найдены в {data_dir}")
         return False
     
     # Поиск изображений
@@ -56,7 +56,7 @@ def validate_input_data(data_dir: str) -> bool:
             image_files.append(f)
     
     if not image_files:
-        print(f"❌ Изображения не найдены в {data_dir}")
+        print(f"Изображения не найдены в {data_dir}")
         return False
     
     # Проверка соответствия
@@ -65,17 +65,17 @@ def validate_input_data(data_dir: str) -> bool:
     common_ids = xmp_ids & image_ids
     
     if len(common_ids) < 3:
-        print(f"❌ Недостаточно пар XMP-изображение: {len(common_ids)} < 3")
+        print(f"Недостаточно пар XMP-изображение: {len(common_ids)} < 3")
         return False
     
-    print(f"✅ Найдено {len(xmp_files)} XMP файлов и {len(image_files)} изображений")
+    print(f"Найдено {len(xmp_files)} XMP файлов и {len(image_files)} изображений")
     print(f"   Совпадающих пар: {len(common_ids)}")
     return True
 
 
 def load_cameras(data_dir: str):
     """Этап 1: Загрузка параметров камер из XMP файлов"""
-    print("\n🔧 Этап 1: Загрузка параметров камер")
+    print("\nЭтап 1: Загрузка параметров камер")
     
     parser = SimpleXMPParser(enable_logging=False)
     xmp_cameras = parser.load_all_cameras(data_dir)
@@ -89,7 +89,7 @@ def load_cameras(data_dir: str):
 
 def convert_cameras(xmp_cameras):
     """Этап 2: Конвертация параметров камер в OpenCV формат"""
-    print("🔄 Этап 2: Конвертация в OpenCV формат")
+    print("Этап 2: Конвертация в OpenCV формат")
     
     opencv_cameras = convert_cameras_to_opencv(xmp_cameras, CURRENT_IMAGE_SIZE)
     
@@ -102,7 +102,7 @@ def convert_cameras(xmp_cameras):
 
 def detect_markers(data_dir: str):
     """Этап 3: Детекция ArUco маркеров"""
-    print("🎯 Этап 3: Детекция ArUco маркеров (ID 1-13)")
+    print("Этап 3: Детекция ArUco маркеров (ID 1-13)")
     
     detector = SimpleArUcoDetector(enable_logging=False, filter_6x6=True)
     marker_detections = detector.detect_markers_in_directory(data_dir)
@@ -134,7 +134,7 @@ def detect_markers(data_dir: str):
 
 def triangulate_all_markers(opencv_cameras, marker_detections):
     """Этап 4: 3D триангуляция маркеров"""
-    print("🔺 Этап 4: 3D триангуляция маркеров")
+    print("Этап 4: 3D триангуляция маркеров")
     
     # Отладочная информация
     print(f"   Камер с параметрами: {len(opencv_cameras)}")
@@ -173,7 +173,7 @@ def triangulate_all_markers(opencv_cameras, marker_detections):
 
 def create_blender_files(triangulated_markers, opencv_cameras, xmp_cameras, output_dir: str, data_dir: str):
     """Этап 5: Создание aruco_marker.json"""
-    print("🎨 Этап 5: Создание aruco_marker.json")
+    print("Этап 5: Создание aruco_marker.json")
     
     # Подготовка данных для маркеров
     blender_data = prepare_blender_export(triangulated_markers)
@@ -186,9 +186,9 @@ def create_blender_files(triangulated_markers, opencv_cameras, xmp_cameras, outp
     # Статистика
     high_quality_markers = sum(1 for m in triangulated_markers.values() if m.triangulation_confidence >= 0.7)
     
-    print(f"   💾 JSON файл: {json_file}")
-    print(f"   🏷️ Маркеров высокого качества: {high_quality_markers}/{len(triangulated_markers)}")
-    print(f"   📊 Размер файла: {os.path.getsize(json_file) // 1024:.1f} KB")
+    print(f"   JSON файл: {json_file}")
+    print(f"   Маркеров высокого качества: {high_quality_markers}/{len(triangulated_markers)}")
+    print(f"   Размер файла: {os.path.getsize(json_file) // 1024:.1f} KB")
     
     return json_file
 
@@ -236,7 +236,7 @@ def main():
     DATA_DIR = "data"
     OUTPUT_DIR = "results"
     
-    print("🚀 ArUco Автокалибровка - Полный пайплайн")
+    print("ArUco Автокалибровка - Полный пайплайн")
     print("=" * 50)
     print("От XMP файлов до aruco_marker.json")
     print("=" * 50)
@@ -271,26 +271,26 @@ def main():
         # Финальный результат
         execution_time = time.time() - start_time
         
-        print(f"\n🎉 ПАЙПЛАЙН ЗАВЕРШЕН УСПЕШНО!")
-        print(f"⏱️  Время выполнения: {execution_time:.1f} сек")
-        print(f"🎨 Триангулировано маркеров: {len(triangulated_markers)}")
+        print(f"\nПАЙПЛАЙН ЗАВЕРШЕН УСПЕШНО!")
+        print(f"Время выполнения: {execution_time:.1f} сек")
+        print(f"Триангулировано маркеров: {len(triangulated_markers)}")
         
         # Детальная статистика по качеству
         high_quality_markers = sum(1 for m in triangulated_markers.values() if m.triangulation_confidence >= 0.7)
         medium_quality_markers = sum(1 for m in triangulated_markers.values() if 0.5 <= m.triangulation_confidence < 0.7)
         low_quality_markers = sum(1 for m in triangulated_markers.values() if m.triangulation_confidence < 0.5)
         
-        print(f"\n📊 СТАТИСТИКА КАЧЕСТВА:")
-        print(f"   🏷️ Маркеры - 🟢 {high_quality_markers}  🟡 {medium_quality_markers}  🟠 {low_quality_markers}")
+        print(f"\nСТАТИСТИКА КАЧЕСТВА:")
+        print(f"   Маркеры - высокое: {high_quality_markers}  среднее: {medium_quality_markers}  низкое: {low_quality_markers}")
         
-        print(f"\n📂 Результат: {OUTPUT_DIR}")
-        print(f"   💾 {os.path.basename(json_file)} - данные триангулированных маркеров")
+        print(f"\nРезультат: {OUTPUT_DIR}")
+        print(f"   {os.path.basename(json_file)} - данные триангулированных маркеров")
         print(f"")
-        print(f"🎯 Содержимое JSON:")
+        print(f"Содержимое JSON:")
         print(f"   • metadata - информация о триангуляции")
         print(f"   • markers - 3D позиции маркеров с метаданными")
         print(f"")
-        print(f"📋 Структура маркера:")
+        print(f"Структура маркера:")
         print(f"   • id - номер маркера (1-13)")
         print(f"   • position - [X, Y, Z] координаты в метрах")
         print(f"   • confidence - уверенность триангуляции (0-1)")
@@ -302,18 +302,18 @@ def main():
         
         # Рекомендации по качеству
         if high_quality_markers >= 8:
-            print(f"✅ Отличное качество! {high_quality_markers} маркеров высокого качества")
+            print(f"Отличное качество! {high_quality_markers} маркеров высокого качества")
         elif high_quality_markers >= 5:
-            print(f"⚠️  Хорошее качество. {high_quality_markers} маркеров высокого качества")
+            print(f"Хорошее качество. {high_quality_markers} маркеров высокого качества")
         else:
-            print(f"⚠️  Ограниченное качество. Только {high_quality_markers} маркеров высокого качества")
+            print(f"Ограниченное качество. Только {high_quality_markers} маркеров высокого качества")
         
-        print(f"\n💡 JSON готов для использования в других приложениях!")
+        print(f"\nJSON готов для использования в других приложениях!")
         
         return 0
         
     except Exception as e:
-        print(f"💥 Ошибка пайплайна: {e}")
+        print(f"Ошибка пайплайна: {e}")
         return 1
 
 

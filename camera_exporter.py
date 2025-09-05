@@ -56,7 +56,7 @@ class CameraExporter:
         
         # В RealityCapture камеры смотрят в -Z, в Blender тоже в -Z
         # Но из-за перестановки осей нужна корректировка
-        # Поворот на 180° вокруг Z для правильной ориентации
+        # Поворот на 180 градусов вокруг Z для правильной ориентации
         correction_rotation = np.array([
             [-1,  0,  0],  # Поворот на 180° вокруг Z
             [ 0, -1,  0],
@@ -164,7 +164,7 @@ class CameraExporter:
         
         exported_cameras = {}
         
-        print("🎥 Экспорт камер для Blender:")
+        print("Экспорт камер для Blender:")
         
         for camera_id, xmp_data in xmp_cameras.items():
             try:
@@ -175,12 +175,12 @@ class CameraExporter:
                 quality = camera_export['quality']
                 focal = camera_export['focal_length_35mm']
                 
-                quality_icon = {'high': '✅', 'medium': '⚠️', 'low': '❌'}[quality]
+                quality_icon = {'high': 'OK', 'medium': 'WARN', 'low': 'NO'}[quality]
                 print(f"   {camera_id}: pos=({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}), "
                       f"f={focal:.1f}mm {quality_icon}")
                 
             except Exception as e:
-                print(f"   ❌ Ошибка экспорта {camera_id}: {e}")
+                print(f"   Ошибка экспорта {camera_id}: {e}")
                 continue
         
         print(f"   Экспортировано Camera объектов: {len(exported_cameras)}")

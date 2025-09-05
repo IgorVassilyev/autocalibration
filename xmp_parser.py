@@ -104,7 +104,7 @@ class SimpleXMPParser:
     def _get_float_attribute(self, element: ET.Element, attr_name: str, default: float) -> float:
         """Safely extract float attribute with namespace."""
         try:
-            value = element.get(f'{{http://www.capturingreality.com/ns/xcr/1.1#}}{attr_name}')
+            value = element.get(f'{http://www.capturingreality.com/ns/xcr/1.1#}{attr_name}')
             return float(value) if value is not None else default
         except (ValueError, TypeError):
             self.logger.warning(f"Could not parse float attribute {attr_name}, using default {default}")
@@ -112,13 +112,13 @@ class SimpleXMPParser:
 
     def _get_string_attribute(self, element: ET.Element, attr_name: str, default: Optional[str]) -> Optional[str]:
         """Safely extract string attribute with namespace."""
-        value = element.get(f'{{http://www.capturingreality.com/ns/xcr/1.1#}}{attr_name}')
+        value = element.get(f'{http://www.capturingreality.com/ns/xcr/1.1#}{attr_name}')
         return value if value is not None else default
 
     def _get_int_attribute(self, element: ET.Element, attr_name: str, default: int) -> int:
         """Safely extract integer attribute with namespace."""
         try:
-            value = element.get(f'{{http://www.capturingreality.com/ns/xcr/1.1#}}{attr_name}')
+            value = element.get(f'{http://www.capturingreality.com/ns/xcr/1.1#}{attr_name}')
             return int(value) if value is not None else default
         except (ValueError, TypeError):
             self.logger.warning(f"Could not parse int attribute {attr_name}, using default {default}")
@@ -126,7 +126,7 @@ class SimpleXMPParser:
 
     def _get_bool_attribute(self, element: ET.Element, attr_name: str, default: bool) -> bool:
         """Safely extract boolean attribute with namespace."""
-        value = element.get(f'{{http://www.capturingreality.com/ns/xcr/1.1#}}{attr_name}')
+        value = element.get(f'{http://www.capturingreality.com/ns/xcr/1.1#}{attr_name}')
         if value is not None:
             return value == '1' or value.lower() == 'true'
         return default
@@ -358,7 +358,7 @@ class SimpleXMPParser:
                 f.write(f"  Position: [{cam_data['position'][0]:.3f}, {cam_data['position'][1]:.3f}, {cam_data['position'][2]:.3f}]\n")
                 f.write(f"  Focal length: {cam_data['focal_length']:.2f}mm\n")
                 f.write(f"  Distortion model: {cam_data['distortion_model']}\n")
-                f.write(f"  Validation: {'✓' if cam_data['validation']['is_valid'] else '✗'}\n")
+                f.write(f"  Validation: {'+' if cam_data['validation']['is_valid'] else '-'}\n")
                 if cam_data['validation']['warnings']:
                     f.write(f"  Warnings: {'; '.join(cam_data['validation']['warnings'])}\n")
         
