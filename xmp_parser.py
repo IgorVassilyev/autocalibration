@@ -52,37 +52,37 @@ class SimpleXMPParser:
                 'filename': os.path.basename(xmp_path),
                 
                 # === ВНУТРЕННИЕ ПАРАМЕТРЫ КАМЕРЫ ===
-                'focal_length': self._get_float_attribute(desc, 'FocalLength35mm', 35.0),
-                'principal_point_u': self._get_float_attribute(desc, 'PrincipalPointU', 0.0),
-                'principal_point_v': self._get_float_attribute(desc, 'PrincipalPointV', 0.0),
-                'aspect_ratio': self._get_float_attribute(desc, 'AspectRatio', 1.0),
-                'skew': self._get_float_attribute(desc, 'Skew', 0.0),  # НОВОЕ
+                'focal_length': self._get_float_attribute(desc, 'FocalLength35mm', 35.0, ns),
+                'principal_point_u': self._get_float_attribute(desc, 'PrincipalPointU', 0.0, ns),
+                'principal_point_v': self._get_float_attribute(desc, 'PrincipalPointV', 0.0, ns),
+                'aspect_ratio': self._get_float_attribute(desc, 'AspectRatio', 1.0, ns),
+                'skew': self._get_float_attribute(desc, 'Skew', 0.0, ns),  # НОВОЕ
                 
                 # === ВНЕШНИЕ ПАРАМЕТРЫ ===
                 'position': self._parse_position(desc.find('xcr:Position', ns)),
                 'rotation': self._parse_rotation(desc.find('xcr:Rotation', ns)),
                 
                 # === ПАРАМЕТРЫ ДИСТОРСИИ ===
-                'distortion_model': self._get_string_attribute(desc, 'DistortionModel', 'unknown'),  # НОВОЕ
+                'distortion_model': self._get_string_attribute(desc, 'DistortionModel', 'unknown', ns),  # НОВОЕ
                 'distortion': self._parse_distortion(desc.find('xcr:DistortionCoeficients', ns)),
                 
                 # === МЕТАДАННЫЕ КАЛИБРОВКИ ===
-                'xcr_version': self._get_string_attribute(desc, 'Version', 'unknown'),  # НОВОЕ
-                'realitycapture_version': self._get_string_attribute(desc, 'version', 'unknown'),  # НОВОЕ
-                'pose_prior': self._get_string_attribute(desc, 'PosePrior', 'unknown'),  # НОВОЕ
-                'coordinates': self._get_string_attribute(desc, 'Coordinates', 'unknown'),  # НОВОЕ
-                'calibration_prior': self._get_string_attribute(desc, 'CalibrationPrior', 'unknown'),  # НОВОЕ
-                'calibration_group': self._get_int_attribute(desc, 'CalibrationGroup', -1),  # НОВОЕ
-                'distortion_group': self._get_int_attribute(desc, 'DistortionGroup', -1),  # НОВОЕ
+                'xcr_version': self._get_string_attribute(desc, 'Version', 'unknown', ns),  # НОВОЕ
+                'realitycapture_version': self._get_string_attribute(desc, 'version', 'unknown', ns),  # НОВОЕ
+                'pose_prior': self._get_string_attribute(desc, 'PosePrior', 'unknown', ns),  # НОВОЕ
+                'coordinates': self._get_string_attribute(desc, 'Coordinates', 'unknown', ns),  # НОВОЕ
+                'calibration_prior': self._get_string_attribute(desc, 'CalibrationPrior', 'unknown', ns),  # НОВОЕ
+                'calibration_group': self._get_int_attribute(desc, 'CalibrationGroup', -1, ns),  # НОВОЕ
+                'distortion_group': self._get_int_attribute(desc, 'DistortionGroup', -1, ns),  # НОВОЕ
                 
                 # === ФЛАГИ ИСПОЛЬЗОВАНИЯ ===
-                'in_texturing': self._get_bool_attribute(desc, 'InTexturing', True),  # НОВОЕ
-                'in_meshing': self._get_bool_attribute(desc, 'InMeshing', True),  # НОВОЕ
+                'in_texturing': self._get_bool_attribute(desc, 'InTexturing', True, ns),  # НОВОЕ
+                'in_meshing': self._get_bool_attribute(desc, 'InMeshing', True, ns),  # НОВОЕ
                 
                 # === ГЕОЛОКАЦИЯ ===
-                'latitude': self._get_string_attribute(desc, 'latitude', None),  # НОВОЕ
-                'longitude': self._get_string_attribute(desc, 'longitude', None),  # НОВОЕ
-                'altitude': self._parse_altitude(self._get_string_attribute(desc, 'altitude', None)),  # НОВОЕ
+                'latitude': self._get_string_attribute(desc, 'latitude', None, ns),  # НОВОЕ
+                'longitude': self._get_string_attribute(desc, 'longitude', None, ns),  # НОВОЕ
+                'altitude': self._parse_altitude(self._get_string_attribute(desc, 'altitude', None, ns)),  # НОВОЕ
             }
 
             # Валидация критически важных параметров
@@ -101,32 +101,32 @@ class SimpleXMPParser:
             self.logger.error(f"Unexpected error parsing {xmp_path}: {e}")
             return None
 
-    def _get_float_attribute(self, element: ET.Element, attr_name: str, default: float) -> float:
+    def _get_float_attribute(self, element: ET.Element, attr_name: str, default: float, ns: dict) -> float:
         """Safely extract float attribute with namespace."""
         try:
-            value = element.get(f'{http://www.capturingreality.com/ns/xcr/1.1#}{attr_name}')
+            value = element.get(f'{{{ns["xcr"]}}}{attr_name}')
             return float(value) if value is not None else default
         except (ValueError, TypeError):
             self.logger.warning(f"Could not parse float attribute {attr_name}, using default {default}")
             return default
 
-    def _get_string_attribute(self, element: ET.Element, attr_name: str, default: Optional[str]) -> Optional[str]:
+    def _get_string_attribute(self, element: ET.Element, attr_name: str, default: Optional[str], ns: dict) -> Optional[str]:
         """Safely extract string attribute with namespace."""
-        value = element.get(f'{http://www.capturingreality.com/ns/xcr/1.1#}{attr_name}')
+        value = element.get(f'{{{ns["xcr"]}}}{attr_name}')
         return value if value is not None else default
 
-    def _get_int_attribute(self, element: ET.Element, attr_name: str, default: int) -> int:
+    def _get_int_attribute(self, element: ET.Element, attr_name: str, default: int, ns: dict) -> int:
         """Safely extract integer attribute with namespace."""
         try:
-            value = element.get(f'{http://www.capturingreality.com/ns/xcr/1.1#}{attr_name}')
+            value = element.get(f'{{{ns["xcr"]}}}{attr_name}')
             return int(value) if value is not None else default
         except (ValueError, TypeError):
             self.logger.warning(f"Could not parse int attribute {attr_name}, using default {default}")
             return default
 
-    def _get_bool_attribute(self, element: ET.Element, attr_name: str, default: bool) -> bool:
+    def _get_bool_attribute(self, element: ET.Element, attr_name: str, default: bool, ns: dict) -> bool:
         """Safely extract boolean attribute with namespace."""
-        value = element.get(f'{http://www.capturingreality.com/ns/xcr/1.1#}{attr_name}')
+        value = element.get(f'{{{ns["xcr"]}}}{attr_name}')
         if value is not None:
             return value == '1' or value.lower() == 'true'
         return default
